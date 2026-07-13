@@ -1,0 +1,65 @@
+import { Hono } from 'hono';
+import { HonoEnv } from '../types';
+import { isAuthenticated } from '../middleware/auth';
+
+const app = new Hono<HonoEnv>();
+
+/**
+ * GET /api/me — Return the current authenticated user's data.
+ */
+app.get('/me', isAuthenticated, (c) => {
+  const user = c.get('user');
+  // Don't expose sensitive fields
+  return c.json({
+    id: user.id,
+    email: user.email,
+    display_name: user.display_name,
+    role: user.role,
+    created_at: user.created_at,
+    generations_used: user.generations_used,
+    generations_remaining: user.generations_remaining,
+    subscription_plan: user.subscription_plan,
+    subscription_expires_at: user.subscription_expires_at,
+    lemonsqueezy_subscription_id: user.lemonsqueezy_subscription_id,
+    referral_code: user.referral_code,
+    referral_points: user.referral_points,
+  });
+});
+
+/**
+ * PUT /api/me/profile — Update display name.
+ */
+app.put('/me/profile', isAuthenticated, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json<{ display_name?: string }>();
+
+  if (!body.display_name || body.display_name.trim().length === 0) {
+    return c.json({ error: 'Le nom ne peut pas être vide.' }, 400);
+  }
+
+  const displayName = body.display_name.trim().substring(0, 255);
+
+  await c.env.DB.prepare('UPDATE users SET display_name = ? WHERE id = ?')
+    .bind(displayName, user.id)
+    .run();
+
+  return c.json({ display_name: displayName });
+});
+
+/**
+ * DELETE /api/me — Soft delete account.
+ */
+app.delete('/me', isAuthenticated, async (c) => {
+  const user = c.get('user');
+  const sessionId = c.get('sessionId');
+
+  // Soft delete + clear all sessions
+  await c.env.DB.batch([
+    c.env.DB.prepare("UPDATE users SET deleted_at = datetime('now') WHERE id = ?").bind(user.id),
+    c.env.DB.prepare('DELETE FROM active_sessions WHERE user_id = ?').bind(user.id),
+  ]);
+
+  return c.json({ message: 'Account deleted' });
+});
+
+export default app;
