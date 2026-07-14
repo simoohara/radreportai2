@@ -1,6 +1,6 @@
-import { Context, Next } from 'hono';
+import type { Context, Next } from 'hono';
 import { jwtVerify, SignJWT } from 'jose';
-import { HonoEnv, User } from '../types';
+import type { HonoEnv, User } from '../types';
 
 const encoder = new TextEncoder();
 

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { HonoEnv } from './types';
+import type { HonoEnv } from './types';
 import authRoutes from './routes/auth';
 import userRoutes from './routes/user';
 import templateRoutes from './routes/templates';

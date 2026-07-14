@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { HonoEnv } from '../types';
+import type { HonoEnv } from '../types';
 import { isAuthenticated } from '../middleware/auth';
 
 const app = new Hono<HonoEnv>();

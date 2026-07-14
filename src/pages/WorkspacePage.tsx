@@ -18,7 +18,7 @@ export function WorkspacePage() {
     selectedTemplate, loadTemplates, setSelectedModality, selectTemplate,
   } = useTemplateStore();
   const {
-    notes, editLevel, generatedReport, isGenerating,
+    notes, editLevel, isGenerating,
     isRecording, isTranscribing,
     setNotes, setEditLevel, setGeneratedReport,
     setIsGenerating, setIsRecording, setIsTranscribing, appendToNotes,

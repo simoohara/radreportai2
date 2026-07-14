@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { HonoEnv } from '../types';
+import type { HonoEnv } from '../types';
 import { isAuthenticated } from '../middleware/auth';
 
 const app = new Hono<HonoEnv>();
@@ -51,8 +51,6 @@ app.put('/me/profile', isAuthenticated, async (c) => {
  */
 app.delete('/me', isAuthenticated, async (c) => {
   const user = c.get('user');
-  const sessionId = c.get('sessionId');
-
   // Soft delete + clear all sessions
   await c.env.DB.batch([
     c.env.DB.prepare("UPDATE users SET deleted_at = datetime('now') WHERE id = ?").bind(user.id),

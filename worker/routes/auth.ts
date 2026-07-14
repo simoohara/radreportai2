@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { HonoEnv, User } from '../types';
+import type { HonoEnv, User } from '../types';
 import { signToken, createSession } from '../middleware/auth';
 
 const app = new Hono<HonoEnv>();
@@ -83,12 +83,8 @@ app.get('/google/callback', async (c) => {
       .bind(profile.id, profile.email)
       .first<User>();
 
-    let isNewUser = false;
-
     if (!user) {
       // Create new user
-      isNewUser = true;
-
       // Handle referral
       let referrerId: number | null = null;
       if (referralCode) {
