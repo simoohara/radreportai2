@@ -4,8 +4,8 @@ export interface Env {
   SESSION_SECRET: string;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
-  CLIENT_URL: string;
-  SERVER_URL: string;
+  APP_URL: string;
+  
   RESEND_API: string;
   LEMONSQUEEZY_API_KEY: string;
   LEMONSQUEEZY_STORE_ID: string;

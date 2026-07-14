@@ -10,7 +10,7 @@ const app = new Hono<HonoEnv>();
 app.get('/google', (c) => {
   const params = new URLSearchParams({
     client_id: c.env.GOOGLE_CLIENT_ID,
-    redirect_uri: `${c.env.SERVER_URL}/auth/google/callback`,
+    redirect_uri: `${c.env.APP_URL}/api/auth/google/callback`,
     response_type: 'code',
     scope: 'openid email profile',
     access_type: 'offline',
@@ -36,7 +36,7 @@ app.get('/google/callback', async (c) => {
   const referralCode = c.req.query('state') || null;
 
   if (!code) {
-    return c.redirect(`${c.env.CLIENT_URL}/?error=login_failed`);
+    return c.redirect(`${c.env.APP_URL}/?error=login_failed`);
   }
 
   try {
@@ -48,14 +48,14 @@ app.get('/google/callback', async (c) => {
         code,
         client_id: c.env.GOOGLE_CLIENT_ID,
         client_secret: c.env.GOOGLE_CLIENT_SECRET,
-        redirect_uri: `${c.env.SERVER_URL}/auth/google/callback`,
+        redirect_uri: `${c.env.APP_URL}/api/auth/google/callback`,
         grant_type: 'authorization_code',
       }).toString(),
     });
 
     if (!tokenResponse.ok) {
       console.error('Google token exchange failed:', await tokenResponse.text());
-      return c.redirect(`${c.env.CLIENT_URL}/?error=login_failed`);
+      return c.redirect(`${c.env.APP_URL}/?error=login_failed`);
     }
 
     const tokens = await tokenResponse.json() as { access_token: string };
@@ -67,7 +67,7 @@ app.get('/google/callback', async (c) => {
 
     if (!profileResponse.ok) {
       console.error('Google profile fetch failed:', await profileResponse.text());
-      return c.redirect(`${c.env.CLIENT_URL}/?error=login_failed`);
+      return c.redirect(`${c.env.APP_URL}/?error=login_failed`);
     }
 
     const profile = await profileResponse.json() as {
@@ -115,7 +115,7 @@ app.get('/google/callback', async (c) => {
         .first<User>();
 
       if (!user) {
-        return c.redirect(`${c.env.CLIENT_URL}/?error=login_failed`);
+        return c.redirect(`${c.env.APP_URL}/?error=login_failed`);
       }
 
       console.log(`New user created: ${profile.name} (${profile.email})`);
@@ -158,7 +158,7 @@ app.get('/google/callback', async (c) => {
     }
 
     if (!user) {
-      return c.redirect(`${c.env.CLIENT_URL}/?error=login_failed`);
+      return c.redirect(`${c.env.APP_URL}/?error=login_failed`);
     }
 
     // Create session and sign JWT
@@ -177,11 +177,11 @@ app.get('/google/callback', async (c) => {
       c.env.SESSION_SECRET
     );
 
-    return c.redirect(`${c.env.CLIENT_URL}/?token=${token}`);
+    return c.redirect(`${c.env.APP_URL}/?token=${token}`);
 
   } catch (err) {
     console.error('Google OAuth error:', err);
-    return c.redirect(`${c.env.CLIENT_URL}/?error=login_failed`);
+    return c.redirect(`${c.env.APP_URL}/?error=login_failed`);
   }
 });
 
@@ -239,7 +239,7 @@ app.post('/magiclink', async (c) => {
       .bind(user.id, token, expiresAt)
       .run();
 
-    const magicLinkUrl = `${c.env.SERVER_URL}/auth/magiclink/verify?token=${token}`;
+    const magicLinkUrl = `${c.env.APP_URL}/api/auth/magiclink/verify?token=${token}`;
 
     // Send email via Resend (Phase 9 will flesh this out)
     if (c.env.RESEND_API) {
@@ -282,7 +282,7 @@ app.post('/magiclink', async (c) => {
  */
 app.get('/magiclink/verify', async (c) => {
   const token = c.req.query('token');
-  const clientErrorUrl = `${c.env.CLIENT_URL}/?error=invalid_link`;
+  const clientErrorUrl = `${c.env.APP_URL}/?error=invalid_link`;
 
   if (!token) {
     return c.redirect(clientErrorUrl);
@@ -301,12 +301,12 @@ app.get('/magiclink/verify', async (c) => {
 
     // Check if already used
     if (record.used_at) {
-      return c.redirect(`${c.env.CLIENT_URL}/?error=link_used`);
+      return c.redirect(`${c.env.APP_URL}/?error=link_used`);
     }
 
     // Check expiry
     if (new Date(record.expires_at) < new Date()) {
-      return c.redirect(`${c.env.CLIENT_URL}/?error=link_expired`);
+      return c.redirect(`${c.env.APP_URL}/?error=link_expired`);
     }
 
     // Mark as used
@@ -341,7 +341,7 @@ app.get('/magiclink/verify', async (c) => {
       c.env.SESSION_SECRET
     );
 
-    return c.redirect(`${c.env.CLIENT_URL}/?token=${jwtToken}`);
+    return c.redirect(`${c.env.APP_URL}/?token=${jwtToken}`);
 
   } catch (err) {
     console.error('Magic link verification error:', err);
