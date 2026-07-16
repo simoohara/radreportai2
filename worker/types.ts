@@ -22,6 +22,7 @@ export interface Env {
   GA_API_SECRET: string;
   TELEGRAM_BOT_TOKEN: string;
   TELEGRAM_CHAT_ID: string;
+  ASSETS: Fetcher;
 }
 
 export interface User {

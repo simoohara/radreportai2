@@ -49,9 +49,17 @@ app.route('/api', billingRoutes);
 app.route('/api', adminRoutes);
 app.route('/api', webhookRoutes);
 
-// 404 catch-all for API routes
-app.notFound((c) => {
-  return c.json({ error: 'Not found' }, 404);
+// Catch-all: API routes get 404, frontend routes get index.html (SPA)
+app.notFound(async (c) => {
+  const path = c.req.path;
+  if (path.startsWith('/api/') || path.startsWith('/auth/')) {
+    return c.json({ error: 'Not found' }, 404);
+  }
+  
+  // Serve the SPA index.html
+  const url = new URL(c.req.url);
+  url.pathname = '/index.html';
+  return c.env.ASSETS.fetch(new Request(url.toString(), c.req.raw));
 });
 
 // Global error handler

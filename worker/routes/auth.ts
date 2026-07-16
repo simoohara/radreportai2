@@ -10,7 +10,7 @@ const app = new Hono<HonoEnv>();
 app.get('/google', (c) => {
   const params = new URLSearchParams({
     client_id: c.env.GOOGLE_CLIENT_ID,
-    redirect_uri: `${c.env.APP_URL}/api/auth/google/callback`,
+    redirect_uri: `${c.env.APP_URL}/auth/google/callback`,
     response_type: 'code',
     scope: 'openid email profile',
     access_type: 'offline',
@@ -48,7 +48,7 @@ app.get('/google/callback', async (c) => {
         code,
         client_id: c.env.GOOGLE_CLIENT_ID,
         client_secret: c.env.GOOGLE_CLIENT_SECRET,
-        redirect_uri: `${c.env.APP_URL}/api/auth/google/callback`,
+        redirect_uri: `${c.env.APP_URL}/auth/google/callback`,
         grant_type: 'authorization_code',
       }).toString(),
     });
