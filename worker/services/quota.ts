@@ -15,12 +15,9 @@ export async function checkAndDecrementQuota(
   db: D1Database,
   user: User
 ): Promise<QuotaResult> {
-  const hasActiveSub =
-    user.subscription_plan &&
-    user.subscription_expires_at &&
-    new Date(user.subscription_expires_at) > new Date();
+  const isUnlimited = user.generations_remaining === null;
 
-  if (hasActiveSub) {
+  if (isUnlimited) {
     await db
       .prepare('UPDATE users SET generations_used = generations_used + 1 WHERE id = ?')
       .bind(user.id)
@@ -50,4 +47,24 @@ export async function checkAndDecrementQuota(
   }
 
   return { canProceed: true };
+}
+
+/** Undo a quota charge when the upstream AI provider fails before producing a result. */
+export async function refundQuota(db: D1Database, user: User): Promise<void> {
+  const isUnlimited = user.generations_remaining === null;
+
+  if (isUnlimited) {
+    await db
+      .prepare('UPDATE users SET generations_used = MAX(generations_used - 1, 0) WHERE id = ?')
+      .bind(user.id)
+      .run();
+    return;
+  }
+
+  await db
+    .prepare(
+      'UPDATE users SET generations_remaining = generations_remaining + 1, generations_used = MAX(generations_used - 1, 0) WHERE id = ?'
+    )
+    .bind(user.id)
+    .run();
 }

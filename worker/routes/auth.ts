@@ -1,13 +1,44 @@
 import { Hono } from 'hono';
+import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
+import { jwtVerify, SignJWT } from 'jose';
 import type { HonoEnv, User } from '../types';
 import { signToken, createSession } from '../middleware/auth';
+import { sendFacebookEvent, sendGAEvent } from '../services/analytics';
+import { sendNewUserAlert } from '../services/telegram';
+import { authLimiter } from '../middleware/rateLimit';
 
 const app = new Hono<HonoEnv>();
+const encoder = new TextEncoder();
+const OAUTH_STATE_COOKIE = 'oauth_state';
+
+async function createOAuthState(referralCode: string | undefined, secret: string): Promise<string> {
+  return new SignJWT(referralCode ? { referralCode } : {})
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime('10m')
+    .setJti(crypto.randomUUID())
+    .sign(encoder.encode(secret));
+}
+
+async function readOAuthState(state: string, secret: string): Promise<string | null> {
+  const { payload } = await jwtVerify(state, encoder.encode(secret));
+  return typeof payload.referralCode === 'string' ? payload.referralCode : null;
+}
 
 /**
  * Step 1: Redirect user to Google OAuth consent screen.
  */
-app.get('/google', (c) => {
+app.get('/google', async (c) => {
+  const referralCode = c.req.query('ref')?.trim().slice(0, 255);
+  const state = await createOAuthState(referralCode, c.env.SESSION_SECRET);
+  setCookie(c, OAUTH_STATE_COOKIE, state, {
+    httpOnly: true,
+    secure: new URL(c.req.url).protocol === 'https:',
+    sameSite: 'Lax',
+    path: '/auth/google/callback',
+    maxAge: 10 * 60,
+  });
+
   const params = new URLSearchParams({
     client_id: c.env.GOOGLE_CLIENT_ID,
     redirect_uri: `${c.env.APP_URL}/auth/google/callback`,
@@ -17,11 +48,7 @@ app.get('/google', (c) => {
     prompt: 'consent',
   });
 
-  // Pass along referral code if present
-  const state = c.req.query('ref');
-  if (state) {
-    params.set('state', state);
-  }
+  params.set('state', state);
 
   return c.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
 });
@@ -33,9 +60,18 @@ app.get('/google', (c) => {
  */
 app.get('/google/callback', async (c) => {
   const code = c.req.query('code');
-  const referralCode = c.req.query('state') || null;
+  const state = c.req.query('state');
+  const savedState = getCookie(c, OAUTH_STATE_COOKIE);
+  deleteCookie(c, OAUTH_STATE_COOKIE, { path: '/auth/google/callback' });
 
-  if (!code) {
+  if (!code || !state || !savedState || state !== savedState) {
+    return c.redirect(`${c.env.APP_URL}/?error=login_failed`);
+  }
+
+  let referralCode: string | null = null;
+  try {
+    referralCode = await readOAuthState(state, c.env.SESSION_SECRET);
+  } catch {
     return c.redirect(`${c.env.APP_URL}/?error=login_failed`);
   }
 
@@ -120,8 +156,14 @@ app.get('/google/callback', async (c) => {
 
       console.log(`New user created: ${profile.name} (${profile.email})`);
 
-      // Fire-and-forget: welcome email, telegram alert, analytics
-      // (These will be implemented in Phase 9)
+      // Fire-and-forget: analytics & notifications
+      c.executionCtx.waitUntil(
+        Promise.all([
+          sendFacebookEvent(c.env, 'CompleteRegistration', { email: profile.email }, {}, c.req.url),
+          sendGAEvent(c.env, 'sign_up', { method: 'Google' }, user.id),
+          sendNewUserAlert(c.env, user),
+        ])
+      );
 
     } else {
       // Existing user — update if needed
@@ -188,12 +230,17 @@ app.get('/google/callback', async (c) => {
 /**
  * Magic Link: Request a login link via email.
  */
-app.post('/magiclink', async (c) => {
+app.post('/magiclink', authLimiter, async (c) => {
   const body = await c.req.json<{ email: string }>();
   const email = body.email?.toLowerCase()?.trim();
 
   if (!email || !email.includes('@')) {
     return c.json({ error: 'Adresse email invalide.' }, 400);
+  }
+
+  if (!c.env.RESEND_API) {
+    console.error('Magic link delivery is unavailable: RESEND_API is not configured.');
+    return c.json({ error: 'L’envoi des liens de connexion n’est pas encore configuré.' }, 503);
   }
 
   try {
@@ -216,6 +263,16 @@ app.post('/magiclink', async (c) => {
       user = await c.env.DB.prepare('SELECT * FROM users WHERE email = ?')
         .bind(email)
         .first<User>();
+
+      if (user) {
+        c.executionCtx.waitUntil(
+          Promise.all([
+            sendFacebookEvent(c.env, 'CompleteRegistration', { email }, {}, c.req.url),
+            sendGAEvent(c.env, 'sign_up', { method: 'MagicLink' }, user.id),
+            sendNewUserAlert(c.env, user),
+          ])
+        );
+      }
     }
 
     if (!user) {
@@ -239,21 +296,21 @@ app.post('/magiclink', async (c) => {
       .bind(user.id, token, expiresAt)
       .run();
 
-    const magicLinkUrl = `${c.env.APP_URL}/api/auth/magiclink/verify?token=${token}`;
+    // Auth routes are mounted at /auth (not /api/auth) in worker/index.ts.
+    const magicLinkUrl = `${c.env.APP_URL}/auth/magiclink/verify?token=${token}`;
 
-    // Send email via Resend (Phase 9 will flesh this out)
-    if (c.env.RESEND_API) {
-      await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${c.env.RESEND_API}`,
-        },
-        body: JSON.stringify({
-          from: 'Dr. Rad <contact@radreportai.com>',
-          to: email,
-          subject: 'Votre lien de connexion à Rad Report AI',
-          html: `
+    // Send the link through Resend. Do not claim success if the provider rejects it.
+    const emailResponse = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${c.env.RESEND_API}`,
+      },
+      body: JSON.stringify({
+        from: 'Dr. Rad <contact@radreportai.com>',
+        to: email,
+        subject: 'Votre lien de connexion à Rad Report AI',
+        html: `
             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
               <h2>Connexion à Rad Report AI</h2>
               <p>Cliquez sur le bouton ci-dessous pour vous connecter :</p>
@@ -263,10 +320,12 @@ app.post('/magiclink', async (c) => {
               <p style="color: #666; font-size: 14px; margin-top: 24px;">Ce lien expire dans 15 minutes.</p>
             </div>
           `,
-        }),
-      });
-    } else {
-      console.log(`Magic link (email not configured): ${magicLinkUrl}`);
+      }),
+    });
+
+    if (!emailResponse.ok) {
+      console.error('Magic link email delivery failed:', await emailResponse.text());
+      return c.json({ error: 'Impossible d’envoyer le lien de connexion. Réessayez plus tard.' }, 502);
     }
 
     return c.json({ message: 'Lien de connexion envoyé. Vérifiez votre boîte de réception.' });

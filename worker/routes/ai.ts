@@ -2,7 +2,8 @@ import { Hono } from 'hono';
 import type { HonoEnv } from '../types';
 import { isAuthenticated } from '../middleware/auth';
 import { generateContent, generateContentWithSearch, transcribeAudio } from '../services/gemini';
-import { checkAndDecrementQuota } from '../services/quota';
+import { checkAndDecrementQuota, refundQuota } from '../services/quota';
+import { sendFacebookEvent, sendGAEvent } from '../services/analytics';
 
 const app = new Hono<HonoEnv>();
 
@@ -76,11 +77,6 @@ const SUMMARIZE_EXAMPLE_OUTPUT = `
  */
 app.post('/generate', isAuthenticated, async (c) => {
   const user = c.get('user');
-  const quotaCheck = await checkAndDecrementQuota(c.env.DB, user);
-  if (!quotaCheck.canProceed) {
-    return c.json({ error: quotaCheck.error }, 402);
-  }
-
   const body = await c.req.json<{
     template: string;
     notes: string;
@@ -95,6 +91,11 @@ app.post('/generate', isAuthenticated, async (c) => {
   const specificInstructions = EDIT_PROMPTS[body.editLevel];
   if (!specificInstructions) {
     return c.json({ error: 'Invalid editLevel' }, 400);
+  }
+
+  const quotaCheck = await checkAndDecrementQuota(c.env.DB, user);
+  if (!quotaCheck.canProceed) {
+    return c.json({ error: quotaCheck.error }, 402);
   }
 
   try {
@@ -120,10 +121,18 @@ ${body.notes}`;
 
     const text = await generateContent(c.env.API_KEY, fullPrompt, GENERATE_SYSTEM_INSTRUCTION);
 
-    // Analytics events will be added in Phase 9
+    c.executionCtx.waitUntil(
+      Promise.all([
+        sendFacebookEvent(c.env, 'GenerateReport', { email: user.email }, { modality: body.modality || 'unknown' }, c.req.url),
+        sendGAEvent(c.env, 'generate_report', { modality: body.modality || 'unknown' }, user.id),
+      ])
+    );
 
     return c.json({ text });
   } catch (error) {
+    await refundQuota(c.env.DB, user).catch((refundError) => {
+      console.error('Failed to refund generation quota:', refundError);
+    });
     console.error('Error with Gemini API:', error);
     return c.json({ error: 'Failed to generate report from Gemini API' }, 500);
   }
@@ -134,14 +143,14 @@ ${body.notes}`;
  */
 app.post('/summarize-report', isAuthenticated, async (c) => {
   const user = c.get('user');
-  const quotaCheck = await checkAndDecrementQuota(c.env.DB, user);
-  if (!quotaCheck.canProceed) {
-    return c.json({ error: quotaCheck.error }, 402);
-  }
-
   const body = await c.req.json<{ reportContent: string }>();
   if (!body.reportContent) {
     return c.json({ error: 'reportContent is required.' }, 400);
+  }
+
+  const quotaCheck = await checkAndDecrementQuota(c.env.DB, user);
+  if (!quotaCheck.canProceed) {
+    return c.json({ error: quotaCheck.error }, 402);
   }
 
   try {
@@ -163,6 +172,9 @@ ${body.reportContent}`;
 
     return c.json({ text: cleanedText });
   } catch (error) {
+    await refundQuota(c.env.DB, user).catch((refundError) => {
+      console.error('Failed to refund generation quota:', refundError);
+    });
     console.error('Error summarizing report:', error);
     return c.json({ error: 'Failed to summarize report' }, 500);
   }
@@ -173,11 +185,6 @@ ${body.reportContent}`;
  */
 app.post('/generate-normal-template', isAuthenticated, async (c) => {
   const user = c.get('user');
-  const quotaCheck = await checkAndDecrementQuota(c.env.DB, user);
-  if (!quotaCheck.canProceed) {
-    return c.json({ error: quotaCheck.error }, 402);
-  }
-
   const body = await c.req.json<{
     modality: string;
     region: string;
@@ -188,6 +195,11 @@ app.post('/generate-normal-template', isAuthenticated, async (c) => {
 
   if (!body.modality || !body.region) {
     return c.json({ error: 'Modality and region are required' }, 400);
+  }
+
+  const quotaCheck = await checkAndDecrementQuota(c.env.DB, user);
+  if (!quotaCheck.canProceed) {
+    return c.json({ error: quotaCheck.error }, 402);
   }
 
   const fullRegionDescription = [body.region, body.laterality, body.gender ? `(${body.gender})` : '']
@@ -228,8 +240,18 @@ ${exampleTemplate}
     const text = await generateContentWithSearch(c.env.API_KEY, prompt);
     const cleanedText = text.replace(/```html/g, '').replace(/```/g, '').trim();
 
+    c.executionCtx.waitUntil(
+      Promise.all([
+        sendFacebookEvent(c.env, 'GenerateReport', { email: user.email }, { modality: body.modality || 'unknown', type: 'normal' }, c.req.url),
+        sendGAEvent(c.env, 'generate_report', { modality: body.modality || 'unknown', type: 'normal' }, user.id),
+      ])
+    );
+
     return c.json({ content: cleanedText });
   } catch (error) {
+    await refundQuota(c.env.DB, user).catch((refundError) => {
+      console.error('Failed to refund generation quota:', refundError);
+    });
     console.error('Error generating normal template:', error);
     return c.json({ error: 'Failed to generate normal template' }, 500);
   }
@@ -239,14 +261,28 @@ ${exampleTemplate}
  * POST /api/transcribe — Transcribe audio dictation using Gemini.
  */
 app.post('/transcribe', isAuthenticated, async (c) => {
-  const body = await c.req.json<{ audioData: string; keywords?: string }>();
+  const body = await c.req.json<{ audioData: string; mimeType?: string; keywords?: string }>();
 
   if (!body.audioData) {
     return c.json({ error: 'Audio data is required' }, 400);
   }
 
+  const mimeType = (body.mimeType || 'audio/webm').split(';')[0].toLowerCase();
+  const supportedMimeTypes = new Set(['audio/webm', 'audio/ogg', 'audio/mp4', 'audio/mpeg', 'audio/wav']);
+  const maxBase64Length = 14 * 1024 * 1024; // roughly 10 MB of audio before base64 encoding
+
+  if (!supportedMimeTypes.has(mimeType)) {
+    return c.json({ error: 'Unsupported audio format' }, 400);
+  }
+  if (body.audioData.length > maxBase64Length) {
+    return c.json({ error: 'Audio recording is too large. Please record a shorter dictation.' }, 413);
+  }
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(body.audioData)) {
+    return c.json({ error: 'Invalid audio data' }, 400);
+  }
+
   try {
-    const transcription = await transcribeAudio(c.env.API_KEY, body.audioData, body.keywords);
+    const transcription = await transcribeAudio(c.env.API_KEY, body.audioData, mimeType, body.keywords);
     return c.json({ transcription });
   } catch (error) {
     console.error('Error with transcription API:', error);

@@ -4,7 +4,32 @@ import { isAuthenticated, isAdmin } from '../middleware/auth';
 
 const app = new Hono<HonoEnv>();
 
-// Admin routes will be fully implemented in Phase 9.
+/**
+ * GET /api/admin/stats — Dashboard stats (admin only).
+ */
+app.get('/admin/stats', isAuthenticated, isAdmin, async (c) => {
+  const db = c.env.DB;
+
+  const totalUsers = await db.prepare("SELECT COUNT(*) as count FROM users WHERE deleted_at IS NULL").first<{ count: number }>();
+  const activeSubscribers = await db.prepare("SELECT COUNT(*) as count FROM users WHERE subscription_plan IS NOT NULL AND deleted_at IS NULL").first<{ count: number }>();
+  const totalTemplates = await db.prepare("SELECT COUNT(*) as count FROM templates").first<{ count: number }>();
+  const totalGenerations = await db.prepare("SELECT COALESCE(SUM(generations_used), 0) as total FROM users").first<{ total: number }>();
+  const feedbackNew = await db.prepare("SELECT COUNT(*) as count FROM feedback WHERE status = 'new' AND is_archived = 0").first<{ count: number }>();
+  const feedbackInProgress = await db.prepare("SELECT COUNT(*) as count FROM feedback WHERE status = 'in_progress' AND is_archived = 0").first<{ count: number }>();
+  const feedbackResolved = await db.prepare("SELECT COUNT(*) as count FROM feedback WHERE status = 'resolved' AND is_archived = 0").first<{ count: number }>();
+
+  return c.json({
+    totalUsers: totalUsers?.count ?? 0,
+    activeSubscribers: activeSubscribers?.count ?? 0,
+    totalTemplates: totalTemplates?.count ?? 0,
+    totalGenerations: totalGenerations?.total ?? 0,
+    feedback: {
+      new: feedbackNew?.count ?? 0,
+      in_progress: feedbackInProgress?.count ?? 0,
+      resolved: feedbackResolved?.count ?? 0,
+    },
+  });
+});
 
 /**
  * GET /api/admin/feedback — List all feedback (admin only).
@@ -64,6 +89,42 @@ app.put('/admin/feedback/:id/archive', isAuthenticated, isAdmin, async (c) => {
     .run();
 
   return c.json({ is_archived: newValue === 1 });
+});
+
+/**
+ * GET /api/admin/users — List all users (admin only).
+ */
+app.get('/admin/users', isAuthenticated, isAdmin, async (c) => {
+  const { results } = await c.env.DB.prepare(
+    `SELECT id, email, display_name, role, created_at, generations_used, generations_remaining,
+            subscription_plan, subscription_expires_at, referral_code, referral_points, deleted_at
+     FROM users ORDER BY created_at DESC`
+  ).all();
+  return c.json(results);
+});
+
+/**
+ * PUT /api/admin/users/:id/subscription — Update a user's subscription (admin only).
+ */
+app.put('/admin/users/:id/subscription', isAuthenticated, isAdmin, async (c) => {
+  const userId = c.req.param('id');
+  const body = await c.req.json<{ subscription_plan: string | null; subscription_expires_at: string | null }>();
+
+  const validPlans = [null, 'Standard', 'Pro', 'Elite'];
+  if (body.subscription_plan !== null && body.subscription_plan !== undefined && !validPlans.includes(body.subscription_plan)) {
+    return c.json({ error: 'Forfait invalide.' }, 400);
+  }
+
+  const existing = await c.env.DB.prepare('SELECT id FROM users WHERE id = ?').first<{ id: number }>();
+  if (!existing) {
+    return c.json({ error: 'Utilisateur non trouvé.' }, 404);
+  }
+
+  await c.env.DB.prepare(
+    'UPDATE users SET subscription_plan = ?, subscription_expires_at = ? WHERE id = ?'
+  ).bind(body.subscription_plan ?? null, body.subscription_expires_at ?? null, userId).run();
+
+  return c.json({ message: 'Abonnement mis à jour.' });
 });
 
 /**

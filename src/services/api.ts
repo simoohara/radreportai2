@@ -1,4 +1,4 @@
-import type { User, Template, Feedback, EditLevel } from '../types';
+import type { User, Template, Feedback, EditLevel, AdminUser } from '../types';
 
 const API_BASE = '';  // Same origin — Cloudflare Vite plugin handles routing
 
@@ -80,6 +80,12 @@ export const api = {
       body: JSON.stringify({ display_name }),
     }),
 
+  updateKeywords: (custom_keywords: string | null) =>
+    fetchWithAuth<{ custom_keywords: string | null }>('/api/me/keywords', {
+      method: 'PUT',
+      body: JSON.stringify({ custom_keywords }),
+    }),
+
   deleteAccount: () =>
     fetchWithAuth<{ message: string }>('/api/me', { method: 'DELETE' }),
 
@@ -114,10 +120,10 @@ export const api = {
       body: JSON.stringify({ reportContent }),
     }),
 
-  transcribe: (audioData: string, keywords?: string) =>
+  transcribe: (audioData: string, mimeType: string, keywords?: string) =>
     fetchWithAuth<{ transcription: string }>('/api/transcribe', {
       method: 'POST',
-      body: JSON.stringify({ audioData, keywords }),
+      body: JSON.stringify({ audioData, mimeType, keywords }),
     }),
 
   generateNormalTemplate: (data: {
@@ -141,7 +147,7 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
-  updateFeedback: (id: number, data: { subject?: string; content?: string }) =>
+  updateFeedback: (id: number, data: { type?: string; subject?: string; content?: string }) =>
     fetchWithAuth<Feedback>(`/api/feedback/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
@@ -161,6 +167,15 @@ export const api = {
     fetchWithAuth<{ url: string }>('/api/billing/manage-url'),
 
   // ─── Admin ──────────────────────────────────────────
+  getAdminStats: () =>
+    fetchWithAuth<{
+      totalUsers: number;
+      activeSubscribers: number;
+      totalTemplates: number;
+      totalGenerations: number;
+      feedback: { new: number; in_progress: number; resolved: number };
+    }>('/api/admin/stats'),
+
   getAdminFeedback: (includeArchived = false) =>
     fetchWithAuth<Feedback[]>(`/api/admin/feedback?includeArchived=${includeArchived}`),
 
@@ -177,6 +192,16 @@ export const api = {
 
   deleteAdminFeedback: (id: number) =>
     fetchWithAuth<{ message: string }>(`/api/admin/feedback/${id}`, { method: 'DELETE' }),
+
+  // ─── Admin Users ───────────────────────────────────
+  getAdminUsers: () =>
+    fetchWithAuth<AdminUser[]>('/api/admin/users'),
+
+  updateUserSubscription: (id: number, data: { subscription_plan: string | null; subscription_expires_at: string | null }) =>
+    fetchWithAuth<{ message: string }>(`/api/admin/users/${id}/subscription`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
 
   // ─── Config ─────────────────────────────────────────
   getConfig: () =>

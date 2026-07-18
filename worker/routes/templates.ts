@@ -37,6 +37,24 @@ app.post('/templates', isAuthenticated, async (c) => {
     return c.json({ error: 'Nom, modalité et contenu sont requis.' }, 400);
   }
 
+  // Enforce template limits based on subscription plan
+  const TEMPLATE_LIMITS: Record<string, number> = { 'Standard': 25, 'Pro': 200, 'Elite': 1000 };
+  const userPlan = user.subscription_plan || 'Free';
+  // Free users cannot create custom templates
+  const limit = userPlan === 'Free' ? 0 : TEMPLATE_LIMITS[userPlan];
+
+  if (limit !== undefined) {
+    const { templateCount } = await c.env.DB.prepare(
+      'SELECT COUNT(*) as templateCount FROM templates WHERE user_id = ?'
+    )
+      .bind(user.id)
+      .first<{ templateCount: number }>() || { templateCount: 0 };
+
+    if (templateCount >= limit) {
+      return c.json({ error: `La limite de ${limit} modèles personnels a été atteinte pour votre forfait.` }, 403);
+    }
+  }
+
   try {
     const result = await c.env.DB.prepare(
       'INSERT INTO templates (user_id, modality, name, content) VALUES (?, ?, ?, ?)'

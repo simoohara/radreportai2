@@ -68,7 +68,7 @@ npx wrangler d1 execute radreportai-db --remote --file=worker/db/seed.sql
 # Set production secrets
 npx wrangler secret put GOOGLE_CLIENT_ID
 npx wrangler secret put GOOGLE_CLIENT_SECRET
-npx wrangler secret put JWT_SECRET
+npx wrangler secret put SESSION_SECRET
 npx wrangler secret put API_KEY
 npx wrangler secret put APP_URL
 

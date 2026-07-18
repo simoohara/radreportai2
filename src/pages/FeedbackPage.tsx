@@ -10,6 +10,7 @@ export function FeedbackPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({ type: 'suggestion', subject: '', content: '' });
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const loadFeedback = async () => {
@@ -28,9 +29,15 @@ export function FeedbackPage() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await api.submitFeedback(formData);
-      toast.success('Feedback envoyé !');
+      if (editingId) {
+        await api.updateFeedback(editingId, { type: formData.type, subject: formData.subject, content: formData.content });
+        toast.success('Feedback mis à jour !');
+      } else {
+        await api.submitFeedback(formData);
+        toast.success('Feedback envoyé !');
+      }
       setShowForm(false);
+      setEditingId(null);
       setFormData({ type: 'suggestion', subject: '', content: '' });
       loadFeedback();
     } catch (err: any) {
@@ -49,11 +56,34 @@ export function FeedbackPage() {
     }
   };
 
+  const handleEdit = (fb: Feedback) => {
+    setEditingId(fb.id);
+    setFormData({ type: fb.type, subject: fb.subject, content: fb.content });
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
-    <div style={{ maxWidth: 700 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h2>Feedback</h2>
-        <button className="btn btn-primary btn-sm" onClick={() => setShowForm(!showForm)}>
+    <div style={{ maxWidth: 800, margin: '0 auto', paddingBottom: 40 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
+        <div>
+          <h2 style={{ fontSize: 28, fontWeight: 700, margin: 0, color: 'var(--color-text)' }}>Feedback</h2>
+          <p style={{ color: 'var(--color-text-secondary)', margin: '8px 0 0 0', fontSize: 15 }}>
+            Vos suggestions et rapports de bugs nous aident à nous améliorer.
+          </p>
+        </div>
+        <button 
+          className="btn btn-primary" 
+          onClick={() => {
+            if (showForm) {
+              setShowForm(false);
+              setEditingId(null);
+              setFormData({ type: 'suggestion', subject: '', content: '' });
+            } else {
+              setShowForm(true);
+            }
+          }}
+        >
           {showForm ? 'Annuler' : '+ Nouveau feedback'}
         </button>
       </div>
@@ -71,6 +101,8 @@ export function FeedbackPage() {
                 <option value="suggestion">Suggestion</option>
                 <option value="bug">Bug</option>
                 <option value="question">Question</option>
+                <option value="billing">Facturation</option>
+                <option value="other">Autre</option>
               </select>
             </div>
             <div>
@@ -94,7 +126,7 @@ export function FeedbackPage() {
               />
             </div>
             <button className="btn btn-primary" disabled={submitting}>
-              {submitting ? 'Envoi...' : 'Envoyer'}
+              {submitting ? 'Envoi...' : (editingId ? 'Mettre à jour' : 'Envoyer')}
             </button>
           </div>
         </form>
@@ -125,7 +157,10 @@ export function FeedbackPage() {
                   <h4 style={{ fontSize: 14 }}>{fb.subject}</h4>
                   <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 4 }}>{fb.content}</p>
                 </div>
-                <button className="btn btn-ghost btn-sm" onClick={() => handleDelete(fb.id)}>🗑️</button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn btn-ghost btn-sm" onClick={() => handleEdit(fb)}>✏️</button>
+                  <button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-delete)' }} onClick={() => handleDelete(fb.id)}>🗑️</button>
+                </div>
               </div>
             </div>
           ))}

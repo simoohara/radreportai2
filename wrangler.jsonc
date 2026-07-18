@@ -12,7 +12,11 @@
     {
       "binding": "DB",
       "database_name": "radreportai-db",
-      "database_id": "bbaa64dd-019b-46b9-94ef-e27979822411"
+      "database_id": "bbaa64dd-019b-46b9-94ef-e27979822411",
+      "migrations_dir": "worker/db/migrations"
     }
-  ]
+  ],
+  "vars": {
+    "APP_URL": "https://app.radreportai.com"
+  }
 }

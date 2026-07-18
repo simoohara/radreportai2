@@ -24,7 +24,7 @@ app.get('/feedback', isAuthenticated, async (c) => {
 app.post('/feedback', isAuthenticated, async (c) => {
   const user = c.get('user');
   const body = await c.req.json<{
-    type: 'suggestion' | 'bug' | 'question';
+    type: 'suggestion' | 'bug' | 'question' | 'billing' | 'other';
     subject: string;
     content: string;
   }>();
@@ -33,7 +33,7 @@ app.post('/feedback', isAuthenticated, async (c) => {
     return c.json({ error: 'Type, sujet et contenu sont requis.' }, 400);
   }
 
-  const validTypes = ['suggestion', 'bug', 'question'];
+  const validTypes = ['suggestion', 'bug', 'question', 'billing', 'other'];
   if (!validTypes.includes(body.type)) {
     return c.json({ error: 'Type invalide.' }, 400);
   }
@@ -57,7 +57,7 @@ app.post('/feedback', isAuthenticated, async (c) => {
 app.put('/feedback/:id', isAuthenticated, async (c) => {
   const user = c.get('user');
   const feedbackId = c.req.param('id');
-  const body = await c.req.json<{ subject?: string; content?: string }>();
+  const body = await c.req.json<{ type?: string; subject?: string; content?: string }>();
 
   const existing = await c.env.DB.prepare(
     'SELECT * FROM feedback WHERE id = ? AND user_id = ?'
@@ -72,6 +72,14 @@ app.put('/feedback/:id', isAuthenticated, async (c) => {
   const updates: string[] = [];
   const params: (string | number)[] = [];
 
+  if (body.type) {
+    const validTypes = ['suggestion', 'bug', 'question', 'billing', 'other'];
+    if (!validTypes.includes(body.type)) {
+      return c.json({ error: 'Type invalide.' }, 400);
+    }
+    updates.push('type = ?');
+    params.push(body.type);
+  }
   if (body.subject) {
     updates.push('subject = ?');
     params.push(body.subject.trim());

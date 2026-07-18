@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
+import { Footer } from './Footer';
 
 const NAV_ITEMS = [
   { path: '/', label: 'Espace de travail', icon: '📝' },
@@ -13,7 +14,9 @@ const NAV_ITEMS = [
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
+  const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarVisible, setSidebarVisible] = useState(true);
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     return (localStorage.getItem('theme') as 'dark' | 'light') || 'dark';
   });
@@ -32,6 +35,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
     setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
   };
 
+  const openSidebar = () => {
+    setSidebarVisible(true);
+    setSidebarOpen(true);
+  };
+
   return (
     <div className="app-layout">
       {/* Mobile menu overlay */}
@@ -40,12 +48,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
       )}
 
       {/* Sidebar */}
-      <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
+      <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''} ${sidebarVisible ? '' : 'sidebar-collapsed'}`}>
         <div className="sidebar-header">
           <div className="sidebar-logo">
-            <span className="logo-icon">🩻</span>
+            <img src="/favicon.png" alt="Logo" className="logo-icon" />
             <span className="logo-text">Rad Report AI</span>
           </div>
+          <button
+            className="btn btn-ghost sidebar-collapse-btn"
+            onClick={() => setSidebarVisible((visible) => !visible)}
+            aria-label={sidebarVisible ? 'Réduire la barre latérale' : 'Développer la barre latérale'}
+            title={sidebarVisible ? 'Réduire la barre latérale' : 'Développer la barre latérale'}
+          >
+            {sidebarVisible ? '‹' : '›'}
+          </button>
         </div>
 
         <nav className="sidebar-nav">
@@ -56,6 +72,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               end={item.path === '/'}
               className={({ isActive }) => `nav-item ${isActive ? 'nav-item-active' : ''}`}
               onClick={() => setSidebarOpen(false)}
+              title={item.label}
             >
               <span className="nav-icon">{item.icon}</span>
               <span className="nav-label">{item.label}</span>
@@ -66,6 +83,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               to="/admin"
               className={({ isActive }) => `nav-item ${isActive ? 'nav-item-active' : ''}`}
               onClick={() => setSidebarOpen(false)}
+              title="Admin"
             >
               <span className="nav-icon">🛡️</span>
               <span className="nav-label">Admin</span>
@@ -75,39 +93,41 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
         <div className="sidebar-footer">
           <button className="btn btn-ghost sidebar-btn" onClick={toggleTheme} title="Changer de thème">
-            {theme === 'dark' ? '☀️' : '🌙'} {theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
+            <span aria-hidden="true">{theme === 'dark' ? '☀️' : '🌙'}</span>
+            <span className="sidebar-btn-label">{theme === 'dark' ? 'Mode clair' : 'Mode sombre'}</span>
           </button>
-          <button className="btn btn-ghost sidebar-btn" onClick={handleLogout}>
-            🚪 Déconnexion
+          <button className="btn btn-ghost sidebar-btn" onClick={handleLogout} title="Déconnexion">
+            <span aria-hidden="true">🚪</span>
+            <span className="sidebar-btn-label">Déconnexion</span>
           </button>
         </div>
       </aside>
 
       {/* Main content */}
       <div className="main-area">
-        {/* Header */}
-        <header className="app-header">
+        {/* Mobile Header */}
+        <header className="mobile-header">
           <button
             className="btn btn-ghost mobile-menu-btn"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
+            onClick={openSidebar}
+            aria-label="Ouvrir le menu"
           >
             ☰
           </button>
-          <div className="header-spacer" />
-          <div className="header-user">
-            <span className="header-user-name">
-              {user?.display_name || user?.email?.split('@')[0] || 'Utilisateur'}
-            </span>
-            {user?.subscription_plan && (
-              <span className="badge badge-new">{user.subscription_plan}</span>
-            )}
+          <div className="mobile-logo">
+            <img src="/favicon.png" alt="Logo" className="logo-icon" style={{ width: 24, height: 24 }} />
+            <span>Rad Report AI</span>
           </div>
         </header>
 
-        {/* Page content */}
-        <main className="page-content">
-          {children}
-        </main>
+        {/* Scrollable area */}
+        <div className="page-scroll">
+          <main className="page-content">
+            {children}
+          </main>
+
+          {location.pathname !== '/' && <Footer />}
+        </div>
       </div>
 
       <style>{layoutStyles}</style>
@@ -123,6 +143,10 @@ const layoutStyles = `
 }
 
 /* ─── Sidebar ─────────────────────────────── */
+.mobile-header {
+  display: none;
+}
+
 .sidebar {
   width: var(--sidebar-width);
   min-width: var(--sidebar-width);
@@ -130,13 +154,17 @@ const layoutStyles = `
   border-right: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
-  transition: transform var(--transition-normal);
+  transition: width var(--transition-normal), min-width var(--transition-normal), transform var(--transition-normal), border-color var(--transition-normal);
   z-index: 100;
+  box-shadow: 12px 0 30px rgba(0, 0, 0, 0.08);
 }
 
 .sidebar-header {
   padding: 20px;
   border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .sidebar-logo {
@@ -145,8 +173,64 @@ const layoutStyles = `
   gap: 10px;
 }
 
-.logo-icon {
+.sidebar-collapse-btn {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 50%;
   font-size: 24px;
+  line-height: 1;
+}
+
+.sidebar-collapsed {
+  width: 68px;
+  min-width: 68px;
+}
+
+.sidebar-collapsed .sidebar-header {
+  padding: 14px 10px;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sidebar-collapsed .sidebar-logo {
+  gap: 0;
+}
+
+.sidebar-collapsed .logo-text,
+.sidebar-collapsed .nav-label,
+.sidebar-collapsed .sidebar-btn-label {
+  display: none;
+}
+
+.sidebar-collapsed .sidebar-nav {
+  align-items: center;
+  padding: 12px 10px;
+}
+
+.sidebar-collapsed .nav-item {
+  justify-content: center;
+  width: 44px;
+  padding: 11px 0;
+  gap: 0;
+}
+
+.sidebar-collapsed .sidebar-footer {
+  align-items: center;
+  padding: 10px;
+}
+
+.sidebar-collapsed .sidebar-btn {
+  justify-content: center;
+  width: 44px;
+  padding: 10px 0;
+}
+
+.logo-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
 }
 
 .logo-text {
@@ -188,6 +272,7 @@ const layoutStyles = `
 .nav-item-active {
   background: var(--color-highlight-bg);
   color: var(--color-accent);
+  box-shadow: inset 3px 0 0 var(--color-accent);
 }
 
 .nav-icon {
@@ -221,16 +306,7 @@ const layoutStyles = `
   flex-direction: column;
   overflow: hidden;
   min-width: 0;
-}
-
-.app-header {
-  height: var(--header-height);
-  display: flex;
-  align-items: center;
-  padding: 0 24px;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-bg-alt);
-  gap: 12px;
+  position: relative;
 }
 
 .mobile-menu-btn {
@@ -238,26 +314,70 @@ const layoutStyles = `
   font-size: 20px;
 }
 
-.header-spacer {
+.page-scroll {
   flex: 1;
-}
-
-.header-user {
+  overflow-y: auto;
   display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.header-user-name {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-text-secondary);
+  flex-direction: column;
 }
 
 .page-content {
-  flex: 1;
-  overflow-y: auto;
   padding: 24px;
+  flex: 1;
+}
+
+/* ─── Footer ──────────────────────────────── */
+.app-footer {
+  text-align: center;
+  padding: 40px;
+  color: var(--color-text-tertiary);
+  font-size: 13px;
+  border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.landing-social-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.landing-social-links span {
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
+.social-icon-list {
+  display: flex;
+  gap: 8px;
+}
+
+.social-icon-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  color: var(--color-text-secondary);
+  transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast), transform var(--transition-fast);
+}
+
+.social-icon-link:hover {
+  color: white;
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  transform: translateY(-2px);
+}
+
+.social-icon {
+  width: 17px;
+  height: 17px;
+  fill: currentColor;
 }
 
 /* ─── Responsive ──────────────────────────── */
@@ -272,6 +392,41 @@ const layoutStyles = `
     box-shadow: var(--shadow-lg);
   }
 
+  .sidebar.sidebar-collapsed {
+    width: 280px;
+    min-width: 280px;
+  }
+
+  .sidebar-collapsed .sidebar-header {
+    padding: 20px;
+    flex-direction: row;
+    gap: 0;
+  }
+
+  .sidebar-collapsed .sidebar-logo {
+    gap: 10px;
+  }
+
+  .sidebar-collapsed .logo-text,
+  .sidebar-collapsed .nav-label,
+  .sidebar-collapsed .sidebar-btn-label {
+    display: inline;
+  }
+
+  .sidebar-collapsed .sidebar-nav,
+  .sidebar-collapsed .sidebar-footer {
+    align-items: stretch;
+    padding: 12px;
+  }
+
+  .sidebar-collapsed .nav-item,
+  .sidebar-collapsed .sidebar-btn {
+    justify-content: flex-start;
+    width: 100%;
+    padding: 10px 14px;
+    gap: 12px;
+  }
+
   .sidebar-open {
     transform: translateX(0);
   }
@@ -284,8 +439,40 @@ const layoutStyles = `
     z-index: 99;
   }
 
+  .mobile-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: var(--header-height);
+    background: var(--color-bg-alt);
+    border-bottom: 1px solid var(--color-border);
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+  }
+
+  .mobile-logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 16px;
+  }
+
   .mobile-menu-btn {
     display: flex;
+    position: absolute;
+    left: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 8px 12px;
+    z-index: 60;
+  }
+
+  .sidebar-collapse-btn {
+    display: none;
   }
 
   .page-content {

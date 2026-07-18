@@ -1,151 +1,130 @@
 import DOMPurify from 'dompurify';
 
-/**
- * Extract sections (INDICATION, TECHNIQUE, RÉSULTAT, CONCLUSION) from HTML.
- * Handles both nested (div-wrapped) and flat structures.
- */
-function extractSectionsFromHtml(parentElement: HTMLElement): Record<string, string> {
-  const sections: Record<string, string> = {};
-  const sectionHeaders: Record<string, string[]> = {
-    INDICATION: ['INDICATION'],
-    TECHNIQUE: ['TECHNIQUE'],
-    RÉSULTAT: ['RÉSULTAT', 'RESULTAT', 'RÉSULTATS', 'RESULTATS'],
-    CONCLUSION: ['CONCLUSION'],
-  };
+type CopyResult = 'html' | 'text' | 'failed';
 
-  const getSectionKeyForElement = (element: Element | null): string | null => {
-    if (!element) return null;
-    const text = (element.textContent || '')
-      .toUpperCase()
-      .trim()
-      .replace(':', '')
-      .trim()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '');
-    for (const key in sectionHeaders) {
-      if (sectionHeaders[key].includes(text)) return key;
-    }
-    return null;
-  };
+const BLOCK_ELEMENTS = new Set([
+  'ADDRESS', 'ARTICLE', 'ASIDE', 'BLOCKQUOTE', 'DIV', 'FIGCAPTION', 'FIGURE',
+  'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'OL', 'P', 'PRE', 'SECTION', 'TABLE', 'TR', 'UL',
+]);
 
-  const children = Array.from(parentElement.children);
-  let i = 0;
-  while (i < children.length) {
-    const child = children[i];
-    let sectionKey: string | null = null;
-    let contentElements: Element[] = [];
-
-    // Case 1: Nested block (AI-generated template with <div>s)
-    if (child.tagName === 'DIV' && child.children.length > 0) {
-      const key = getSectionKeyForElement(child.children[0]);
-      if (key) {
-        sectionKey = key;
-        contentElements = Array.from(child.children).slice(1);
-        i++;
-      }
-    }
-
-    // Case 2: Flat structure
-    if (!sectionKey) {
-      const key = getSectionKeyForElement(child);
-      if (key) {
-        sectionKey = key;
-        let j = i + 1;
-        while (j < children.length) {
-          const nextChild = children[j];
-          if (getSectionKeyForElement(nextChild)) break;
-          if (
-            nextChild.tagName === 'DIV' &&
-            nextChild.children.length > 0 &&
-            getSectionKeyForElement(nextChild.children[0])
-          )
-            break;
-          contentElements.push(nextChild);
-          j++;
-        }
-        i = j;
-      } else {
-        i++;
-      }
-    }
-
-    if (sectionKey) {
-      const mergedContent = contentElements
-        .map((el) => el.innerHTML.trim())
-        .filter((html) => html)
-        .join('<br>');
-      sections[sectionKey] = `<p>${mergedContent}</p>`;
-    }
-  }
-
-  return sections;
+function unwrapAiHighlights(root: HTMLElement) {
+  root.querySelectorAll('mark.ai-highlight').forEach((element) => {
+    const fragment = document.createDocumentFragment();
+    while (element.firstChild) fragment.appendChild(element.firstChild);
+    element.parentNode?.replaceChild(fragment, element);
+  });
 }
 
 /**
- * Copy the report HTML to clipboard in both HTML and plain text formats.
- * Strips AI highlight marks before copying.
- * Returns a promise that resolves to 'html' | 'text' | 'failed'.
+ * Keeps the report's original markup instead of rebuilding it into a reduced
+ * section format. Inline styles make the copied document readable in editors
+ * that do not load this application's stylesheet.
  */
-export async function copyReportToClipboard(html: string): Promise<'html' | 'text' | 'failed'> {
-  // Create a temporary DOM element for processing
-  const tempDiv = document.createElement('div');
-  tempDiv.innerHTML = DOMPurify.sanitize(html);
+function createClipboardHtml(html: string): string {
+  const report = document.createElement('div');
+  report.innerHTML = DOMPurify.sanitize(html);
+  unwrapAiHighlights(report);
 
-  // Strip <mark class="ai-highlight"> — unwrap content
-  tempDiv.querySelectorAll('mark.ai-highlight').forEach((el) => {
-    const fragment = document.createDocumentFragment();
-    while (el.firstChild) {
-      fragment.appendChild(el.firstChild);
-    }
-    el.parentNode?.replaceChild(fragment, el);
+  report.querySelectorAll<HTMLElement>('p').forEach((paragraph) => {
+    paragraph.style.margin = '0 0 8pt 0';
+    paragraph.style.whiteSpace = 'pre-wrap';
+  });
+  report.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6').forEach((heading) => {
+    heading.style.margin = '12pt 0 6pt 0';
+    heading.style.fontFamily = 'Arial, Helvetica, sans-serif';
+    heading.style.fontSize = '12pt';
+    heading.style.lineHeight = '1.3';
+  });
+  report.querySelectorAll<HTMLElement>('strong, b').forEach((strong) => {
+    strong.style.fontWeight = '700';
   });
 
-  const sections = extractSectionsFromHtml(tempDiv);
+  return `<div style="font-family: Arial, Helvetica, sans-serif; font-size: 10.5pt; line-height: 1.45; color: #000000; white-space: normal;">${report.innerHTML}</div>`;
+}
 
-  const indicationContent = sections['INDICATION'] || '';
-  const techniqueContent = sections['TECHNIQUE'] || '';
-  const resultatContent = sections['RÉSULTAT'] || '';
-  const conclusionContent = sections['CONCLUSION'] || '';
+/** Create a readable plain-text fallback while retaining paragraph breaks. */
+function createClipboardText(root: HTMLElement): string {
+  const visit = (node: Node): string => {
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent || '';
+    if (node.nodeType !== Node.ELEMENT_NODE) return '';
 
-  // Build structured HTML for PACS
-  const clipboardHtml = `
-    <div><h2><strong>Indication :</strong></h2>${indicationContent.trim() || '<p></p>'}</div>
-    <div><h2><strong>Technique :</strong></h2>${techniqueContent.trim() || '<p></p>'}</div>
-    <div><h2><strong>Résultat :</strong></h2>${resultatContent.trim() || '<p></p>'}</div>
-    <div><h2><strong>Conclusion :</strong></h2>${conclusionContent.trim() || '<p></p>'}</div>
-  `
-    .replace(/>\s+</g, '><')
+    const element = node as HTMLElement;
+    if (element.tagName === 'BR') return '\n';
+
+    const content = Array.from(element.childNodes).map(visit).join('');
+    return BLOCK_ELEMENTS.has(element.tagName) ? `${content}\n` : content;
+  };
+
+  return Array.from(root.childNodes)
+    .map(visit)
+    .join('')
+    .replace(/\u00a0/g, ' ')
+    .replace(/\r\n?/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n[ \t]+/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
 
-  // Build plain text fallback
-  const parser = new DOMParser();
-  const textParts: string[] = [];
-  if (indicationContent.trim() && indicationContent !== '<p></p>')
-    textParts.push(`Indication :\n${parser.parseFromString(indicationContent, 'text/html').body.innerText.trim()}`);
-  if (techniqueContent.trim() && techniqueContent !== '<p></p>')
-    textParts.push(`Technique :\n${parser.parseFromString(techniqueContent, 'text/html').body.innerText.trim()}`);
-  if (resultatContent.trim() && resultatContent !== '<p></p>')
-    textParts.push(`Résultat :\n${parser.parseFromString(resultatContent, 'text/html').body.innerText.trim()}`);
-  if (conclusionContent.trim() && conclusionContent !== '<p></p>')
-    textParts.push(`Conclusion :\n${parser.parseFromString(conclusionContent, 'text/html').body.innerText.trim()}`);
-  const clipboardText = textParts.join('\n\n');
+/**
+ * Safari and some embedded clinical applications do not support ClipboardItem.
+ * Selecting an off-screen editable element makes the browser place HTML and
+ * text representations on the clipboard through the legacy copy mechanism.
+ */
+function copyRichHtmlWithLegacyClipboard(html: string): boolean {
+  const container = document.createElement('div');
+  container.contentEditable = 'true';
+  container.setAttribute('aria-hidden', 'true');
+  container.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;pointer-events:none;';
+  container.innerHTML = html;
+  document.body.appendChild(container);
 
-  // Attempt rich copy
+  const selection = window.getSelection();
+  const existingRanges = selection ? Array.from({ length: selection.rangeCount }, (_, index) => selection.getRangeAt(index)) : [];
+  const range = document.createRange();
+  range.selectNodeContents(container);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+
   try {
-    await navigator.clipboard.write([
-      new ClipboardItem({
-        'text/html': new Blob([clipboardHtml], { type: 'text/html' }),
-        'text/plain': new Blob([clipboardText], { type: 'text/plain' }),
-      }),
-    ]);
-    return 'html';
-  } catch {
-    // Fallback to plain text
+    return document.execCommand('copy');
+  } finally {
+    selection?.removeAllRanges();
+    existingRanges.forEach((existingRange) => selection?.addRange(existingRange));
+    container.remove();
+  }
+}
+
+/**
+ * Copy the report as styled HTML and as a structured text fallback.
+ * AI-only highlight markers are removed before the report leaves the app.
+ */
+export async function copyReportToClipboard(html: string): Promise<CopyResult> {
+  const clipboardHtml = createClipboardHtml(html);
+  const textSource = document.createElement('div');
+  textSource.innerHTML = clipboardHtml;
+  const clipboardText = createClipboardText(textSource);
+
+  if (navigator.clipboard?.write && typeof ClipboardItem !== 'undefined') {
     try {
-      await navigator.clipboard.writeText(clipboardText);
-      return 'text';
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/html': new Blob([clipboardHtml], { type: 'text/html' }),
+          'text/plain': new Blob([clipboardText], { type: 'text/plain' }),
+        }),
+      ]);
+      return 'html';
     } catch {
-      return 'failed';
+      // Fall through to the browser's legacy rich-text clipboard implementation.
     }
+  }
+
+  if (copyRichHtmlWithLegacyClipboard(clipboardHtml)) return 'html';
+
+  try {
+    await navigator.clipboard.writeText(clipboardText);
+    return 'text';
+  } catch {
+    return 'failed';
   }
 }

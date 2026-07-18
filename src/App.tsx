@@ -4,6 +4,7 @@ import { useAuthStore } from './stores/authStore';
 import { Layout } from './components/Layout';
 import { ToastContainer } from './components/Toast';
 import { LandingPage } from './pages/LandingPage';
+import { HowItWorksPage } from './pages/HowItWorksPage';
 import { WorkspacePage } from './pages/WorkspacePage';
 
 // Lazy load secondary pages
@@ -62,7 +63,15 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      {isAuthenticated ? <AuthenticatedApp /> : <Routes><Route path="*" element={<LandingPage />} /></Routes>}
+      {isAuthenticated ? (
+        <AuthenticatedApp />
+      ) : (
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/comment-ca-marche" element={<HowItWorksPage />} />
+          <Route path="*" element={<LandingPage />} />
+        </Routes>
+      )}
       <ToastContainer />
     </BrowserRouter>
   );

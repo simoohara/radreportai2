@@ -25,71 +25,105 @@ export function ProfilePage() {
   if (!user) return null;
 
   return (
-    <div style={{ maxWidth: 600 }}>
-      <h2 style={{ marginBottom: 24 }}>Profil</h2>
-
-      <div className="card" style={{ marginBottom: 20 }}>
-        <h3 style={{ marginBottom: 16 }}>Informations</h3>
-        <div style={{ display: 'grid', gap: 12 }}>
-          <div>
-            <label style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>Email</label>
-            <p style={{ fontWeight: 500 }}>{user.email}</p>
-          </div>
-          <div>
-            <label style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>Membre depuis</label>
-            <p style={{ fontWeight: 500 }}>{new Date(user.created_at).toLocaleDateString('fr-FR')}</p>
-          </div>
-          <div>
-            <label style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>Rapports générés</label>
-            <p style={{ fontWeight: 500 }}>{user.generations_used}</p>
-          </div>
-          <div>
-            <label style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>Générations restantes</label>
-            <p style={{ fontWeight: 500 }}>
-              {user.subscription_plan ? '∞ (abonné)' : (user.generations_remaining ?? 0)}
-            </p>
-          </div>
+    <div style={{ maxWidth: 800, margin: '0 auto', paddingBottom: 40 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
+        <div>
+          <h2 style={{ fontSize: 28, fontWeight: 700, margin: 0, color: 'var(--color-text)' }}>Profil</h2>
+          <p style={{ color: 'var(--color-text-secondary)', margin: '8px 0 0 0', fontSize: 15 }}>
+            Gérez vos informations personnelles et votre parrainage.
+          </p>
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 20 }}>
-        <h3 style={{ marginBottom: 16 }}>Modifier le nom</h3>
-        <form onSubmit={handleSave} style={{ display: 'flex', gap: 12 }}>
-          <input
-            className="input"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="Votre nom"
-          />
-          <button className="btn btn-primary" disabled={saving}>
-            {saving ? '...' : 'Enregistrer'}
-          </button>
-        </form>
-      </div>
-
-      {user.referral_code && (
-        <div className="card">
-          <h3 style={{ marginBottom: 16 }}>Parrainage</h3>
-          <p style={{ fontSize: 14, color: 'var(--color-text-secondary)', marginBottom: 12 }}>
-            Partagez votre code de parrainage. Pour chaque 5 filleuls abonnés, vous gagnez 1 mois gratuit.
-          </p>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input className="input" readOnly value={`${window.location.origin}/?ref=${user.referral_code}`} />
-            <button
-              className="btn btn-secondary"
-              onClick={() => {
-                navigator.clipboard.writeText(`${window.location.origin}/?ref=${user.referral_code}`);
-                toast.success('Lien copié !');
-              }}
-            >
-              Copier
-            </button>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: 24 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {/* Card: Informations */}
+          <div className="card" style={{ padding: 24 }}>
+            <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ color: 'var(--color-accent)' }}>📝</span> Informations
+            </h3>
+            <div style={{ display: 'grid', gap: 16 }}>
+              <div>
+                <label style={{ fontSize: 13, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 4 }}>Email</label>
+                <p style={{ fontWeight: 500, margin: 0 }}>{user.email}</p>
+              </div>
+              <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 16 }}>
+                <label style={{ fontSize: 13, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 4 }}>Membre depuis</label>
+                <p style={{ fontWeight: 500, margin: 0 }}>{new Date(user.created_at).toLocaleDateString('fr-FR')}</p>
+              </div>
+              <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 16, display: 'flex', justifyContent: 'space-between' }}>
+                <div>
+                  <label style={{ fontSize: 13, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 4 }}>Rapports générés</label>
+                  <p style={{ fontWeight: 500, margin: 0 }}>{user.generations_used}</p>
+                </div>
+                <div>
+                  <label style={{ fontSize: 13, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 4 }}>Générations restantes</label>
+                  <p style={{ fontWeight: 500, margin: 0, color: 'var(--color-accent)' }}>
+                    {user.subscription_plan ? '∞ (abonné)' : (user.generations_remaining ?? 0)}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
-          <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', marginTop: 8 }}>
-            Points accumulés : {user.referral_points}
-          </p>
         </div>
-      )}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {/* Card: Modifier le nom */}
+          <div className="card" style={{ padding: 24 }}>
+            <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ color: 'var(--color-accent)' }}>✏️</span> Modifier le nom
+            </h3>
+            <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <label style={{ fontSize: 13, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 8 }}>Nom d'affichage</label>
+                <input
+                  className="input"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="Votre nom complet"
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <button className="btn btn-primary" disabled={saving} style={{ alignSelf: 'flex-start' }}>
+                {saving ? 'Enregistrement...' : 'Enregistrer'}
+              </button>
+            </form>
+          </div>
+
+          {/* Card: Parrainage */}
+          {user.referral_code && (
+            <div className="card" style={{ padding: 24, background: 'var(--color-surface-hover)' }}>
+              <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ color: 'var(--color-accent)' }}>🎁</span> Parrainage
+              </h3>
+              <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
+                Partagez votre lien. Pour chaque 5 confrères abonnés, vous gagnez 1 mois gratuit !
+              </p>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                <input 
+                  className="input" 
+                  readOnly 
+                  value={`${window.location.origin}/?ref=${user.referral_code}`} 
+                  style={{ flex: 1, fontSize: 13, background: 'var(--color-surface)' }}
+                />
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/?ref=${user.referral_code}`);
+                    toast.success('Lien copié !');
+                  }}
+                >
+                  Copier
+                </button>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--color-surface)', borderRadius: 6, border: '1px solid var(--color-border)' }}>
+                <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>Points accumulés</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-accent)' }}>{user.referral_points} ⭐️</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -23,6 +23,7 @@ app.get('/me', isAuthenticated, (c) => {
     lemonsqueezy_subscription_id: user.lemonsqueezy_subscription_id,
     referral_code: user.referral_code,
     referral_points: user.referral_points,
+    custom_keywords: user.custom_keywords,
   });
 });
 
@@ -47,15 +48,31 @@ app.put('/me/profile', isAuthenticated, async (c) => {
 });
 
 /**
- * DELETE /api/me — Soft delete account.
+ * PUT /api/me/keywords — Update custom transcription keywords.
+ */
+app.put('/me/keywords', isAuthenticated, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json<{ custom_keywords?: string | null }>();
+
+  // Allow null/empty to clear keywords; otherwise trim and cap at 5000 chars
+  const keywords = body.custom_keywords?.trim() || null;
+  const safeKeywords = keywords ? keywords.substring(0, 5000) : null;
+
+  await c.env.DB.prepare('UPDATE users SET custom_keywords = ? WHERE id = ?')
+    .bind(safeKeywords, user.id)
+    .run();
+
+  return c.json({ custom_keywords: safeKeywords });
+});
+
+/**
+ * DELETE /api/me — Permanently delete the account and its user-owned data.
  */
 app.delete('/me', isAuthenticated, async (c) => {
   const user = c.get('user');
-  // Soft delete + clear all sessions
-  await c.env.DB.batch([
-    c.env.DB.prepare("UPDATE users SET deleted_at = datetime('now') WHERE id = ?").bind(user.id),
-    c.env.DB.prepare('DELETE FROM active_sessions WHERE user_id = ?').bind(user.id),
-  ]);
+  // Deleting the user cascades to templates, feedback, sessions and magic-link tokens.
+  // This matches the irreversible deletion promise in the settings interface.
+  await c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(user.id).run();
 
   return c.json({ message: 'Account deleted' });
 });

@@ -21,9 +21,8 @@ app.use(
       const allowed = [
         'http://localhost:5173',
         'http://localhost:5174',
-        // Add production domains when deploying:
-        // 'https://radreportai2.pages.dev',
-        // 'https://app.radreportai.com',
+        'https://app.radreportai.com',
+        'https://radreportai2.simoohara.workers.dev',
       ];
       return allowed.includes(origin) ? origin : '';
     },

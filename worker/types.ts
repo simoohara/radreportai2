@@ -10,16 +10,18 @@ export interface Env {
   LEMONSQUEEZY_API_KEY: string;
   LEMONSQUEEZY_STORE_ID: string;
   LEMONSQUEEZY_WEBHOOK_SECRET: string;
+  LEMONSQUEEZY_TEST_MODE?: string;
+  FACEBOOK_PIXEL_ID?: string;
+  FACEBOOK_ACCESS_TOKEN?: string;
+  GA_MEASUREMENT_ID?: string;
+  GA_API_SECRET?: string;
   LEMONSQUEEZY_VARIANT_ID_STANDARD_MONTHLY: string;
   LEMONSQUEEZY_VARIANT_ID_STANDARD_YEARLY: string;
   LEMONSQUEEZY_VARIANT_ID_PRO_MONTHLY: string;
   LEMONSQUEEZY_VARIANT_ID_PRO_YEARLY: string;
   LEMONSQUEEZY_VARIANT_ID_ELITE_MONTHLY: string;
   LEMONSQUEEZY_VARIANT_ID_ELITE_YEARLY: string;
-  FACEBOOK_PIXEL_ID: string;
-  FACEBOOK_ACCESS_TOKEN: string;
-  GA_MEASUREMENT_ID: string;
-  GA_API_SECRET: string;
+
   TELEGRAM_BOT_TOKEN: string;
   TELEGRAM_CHAT_ID: string;
   ASSETS: Fetcher;
@@ -41,6 +43,7 @@ export interface User {
   referral_code: string | null;
   referral_points: number;
   deleted_at: string | null;
+  custom_keywords: string | null;
 }
 
 export interface HonoEnv {

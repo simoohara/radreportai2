@@ -6,7 +6,7 @@ GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
 
 # JWT signing secret (generate a random 64-char string)
-JWT_SECRET=change-me-to-a-random-64-character-string
+SESSION_SECRET=change-me-to-a-random-64-character-string
 
 # Gemini API key
 API_KEY=your-gemini-api-key
@@ -15,5 +15,20 @@ API_KEY=your-gemini-api-key
 APP_URL=http://localhost:5173
 
 # Optional: Analytics
-# FACEBOOK_PIXEL_ID=
-# GA_MEASUREMENT_ID=
+FACEBOOK_PIXEL_ID=
+FACEBOOK_ACCESS_TOKEN=
+GA_MEASUREMENT_ID=
+GA_API_SECRET=
+
+# Billing (LemonSqueezy)
+LEMONSQUEEZY_API_KEY=your-lemonsqueezy-api-key
+LEMONSQUEEZY_STORE_ID=your-store-id
+LEMONSQUEEZY_WEBHOOK_SECRET=your-webhook-signing-secret
+
+# LemonSqueezy Variant IDs (from your product setup)
+LEMONSQUEEZY_VARIANT_ID_STANDARD_MONTHLY=your-variant-id
+LEMONSQUEEZY_VARIANT_ID_STANDARD_YEARLY=your-variant-id
+LEMONSQUEEZY_VARIANT_ID_PRO_MONTHLY=your-variant-id
+LEMONSQUEEZY_VARIANT_ID_PRO_YEARLY=your-variant-id
+LEMONSQUEEZY_VARIANT_ID_ELITE_MONTHLY=your-variant-id
+LEMONSQUEEZY_VARIANT_ID_ELITE_YEARLY=your-variant-id

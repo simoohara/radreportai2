@@ -13,6 +13,7 @@ export interface User {
   lemonsqueezy_subscription_id: string | null;
   referral_code: string | null;
   referral_points: number;
+  custom_keywords: string | null;
 }
 
 export interface Template {
@@ -28,7 +29,7 @@ export interface Template {
 export interface Feedback {
   id: number;
   user_id: number;
-  type: 'suggestion' | 'bug' | 'question';
+  type: 'suggestion' | 'bug' | 'question' | 'billing' | 'other';
   subject: string;
   content: string;
   status: 'new' | 'in_progress' | 'resolved';
@@ -54,6 +55,8 @@ export const FEEDBACK_TYPE_LABELS: Record<string, string> = {
   suggestion: 'Suggestion',
   bug: 'Bug',
   question: 'Question',
+  billing: 'Facturation',
+  other: 'Autre',
 };
 
 export const STATUS_LABELS: Record<string, string> = {
@@ -61,3 +64,18 @@ export const STATUS_LABELS: Record<string, string> = {
   in_progress: 'En cours',
   resolved: 'Résolu',
 };
+
+export interface AdminUser {
+  id: number;
+  email: string;
+  display_name: string | null;
+  role: 'user' | 'admin';
+  created_at: string;
+  generations_used: number;
+  generations_remaining: number | null;
+  subscription_plan: string | null;
+  subscription_expires_at: string | null;
+  referral_code: string | null;
+  referral_points: number;
+  deleted_at: string | null;
+}

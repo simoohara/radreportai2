@@ -26,22 +26,36 @@ interface GeminiRequest {
 }
 
 interface GeminiResponse {
-  candidates: Array<{
+  candidates?: Array<{
     content: {
-      parts: Array<{ text: string }>;
+      parts?: Array<{ text?: string }>;
     };
   }>;
 }
 
+function getResponseText(data: GeminiResponse): string {
+  const text = data.candidates?.[0]?.content?.parts
+    ?.map((part) => part.text || '')
+    .join('')
+    .trim();
+
+  if (!text) {
+    throw new Error('Gemini returned no usable text');
+  }
+
+  return text;
+}
+
 /**
- * Generate text content using Gemini 2.5 Flash.
+ * Generate text content using a specified Gemini model (defaults to Gemini 2.5 Pro).
  */
 export async function generateContent(
   apiKey: string,
   prompt: string,
-  systemInstruction?: string
+  systemInstruction?: string,
+  model: string = 'gemini-2.5-pro'
 ): Promise<string> {
-  const url = `${GEMINI_API_BASE}/gemini-2.5-flash:generateContent?key=${apiKey}`;
+  const url = `${GEMINI_API_BASE}/${model}:generateContent?key=${apiKey}`;
 
   const body: GeminiRequest = {
     contents: [{ parts: [{ text: prompt }] }],
@@ -64,7 +78,7 @@ export async function generateContent(
   }
 
   const data = (await response.json()) as GeminiResponse;
-  return data.candidates[0].content.parts[0].text;
+  return getResponseText(data);
 }
 
 /**
@@ -72,9 +86,10 @@ export async function generateContent(
  */
 export async function generateContentWithSearch(
   apiKey: string,
-  prompt: string
+  prompt: string,
+  model: string = 'gemini-2.5-pro'
 ): Promise<string> {
-  const url = `${GEMINI_API_BASE}/gemini-2.5-flash:generateContent?key=${apiKey}`;
+  const url = `${GEMINI_API_BASE}/${model}:generateContent?key=${apiKey}`;
 
   const body: GeminiRequest = {
     contents: [{ parts: [{ text: prompt }] }],
@@ -94,18 +109,21 @@ export async function generateContentWithSearch(
   }
 
   const data = (await response.json()) as GeminiResponse;
-  return data.candidates[0].content.parts[0].text;
+  return getResponseText(data);
 }
 
 /**
  * Transcribe audio using Gemini with inline audio data.
+ * Always defaults to Gemini 2.5 Flash for speed, cost-efficiency, and stability.
  */
 export async function transcribeAudio(
   apiKey: string,
   audioData: string,
-  keywords?: string
+  mimeType: string,
+  keywords?: string,
+  model: string = 'gemini-2.5-flash'
 ): Promise<string> {
-  const url = `${GEMINI_API_BASE}/gemini-2.5-flash:generateContent?key=${apiKey}`;
+  const url = `${GEMINI_API_BASE}/${model}:generateContent?key=${apiKey}`;
 
   let prompt = "Transcris le texte de cet enregistrement audio. Il s'agit d'une dictée médicale en français pour un compte rendu de radiologie.";
 
@@ -120,7 +138,7 @@ export async function transcribeAudio(
           { text: prompt },
           {
             inlineData: {
-              mimeType: 'audio/webm',
+              mimeType,
               data: audioData,
             },
           },
@@ -142,5 +160,5 @@ export async function transcribeAudio(
   }
 
   const data = (await response.json()) as GeminiResponse;
-  return data.candidates[0].content.parts[0].text;
+  return getResponseText(data);
 }
