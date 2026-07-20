@@ -24,6 +24,22 @@ export function ProfilePage() {
 
   if (!user) return null;
 
+  const minTimeSavedMinutes = (user.generations_used || 0) * 8;
+  const maxTimeSavedMinutes = (user.generations_used || 0) * 10;
+  
+  const formatTime = (totalMinutes: number) => {
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (hours > 0) {
+      return `${hours}h${minutes > 0 ? minutes.toString().padStart(2, '0') : ''}`;
+    }
+    return `${minutes} min`;
+  };
+
+  const timeSavedText = (user.generations_used || 0) > 0 
+    ? `Entre ${formatTime(minTimeSavedMinutes)} et ${formatTime(maxTimeSavedMinutes)}`
+    : '0 min';
+
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', paddingBottom: 40 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
@@ -68,6 +84,22 @@ export function ProfilePage() {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {/* Card: Temps gagné */}
+          <div className="card" style={{ padding: 24, background: 'var(--color-surface-hover)' }}>
+            <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ color: 'var(--color-accent)' }}>⏱️</span> Temps gagné
+            </h3>
+            <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
+              En utilisant Rad Report AI au lieu de dicter manuellement, vous avez économisé un temps précieux sur la rédaction.
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', background: 'var(--color-surface)', borderRadius: 6, border: '1px solid var(--color-border)' }}>
+              <div style={{ textAlign: 'center' }}>
+                <span style={{ fontSize: (user.generations_used || 0) > 0 ? 20 : 24, fontWeight: 700, color: 'var(--color-accent)', display: 'block', marginBottom: 4 }}>{timeSavedText}</span>
+                <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>économisés au total</span>
+              </div>
+            </div>
+          </div>
+
           {/* Card: Modifier le nom */}
           <div className="card" style={{ padding: 24 }}>
             <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>

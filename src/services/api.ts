@@ -197,7 +197,7 @@ export const api = {
   getAdminUsers: () =>
     fetchWithAuth<AdminUser[]>('/api/admin/users'),
 
-  updateUserSubscription: (id: number, data: { subscription_plan: string | null; subscription_expires_at: string | null }) =>
+  updateUserSubscription: (id: number, data: { subscription_plan: string | null; subscription_expires_at: string | null; role?: 'user' | 'admin' }) =>
     fetchWithAuth<{ message: string }>(`/api/admin/users/${id}/subscription`, {
       method: 'PUT',
       body: JSON.stringify(data),

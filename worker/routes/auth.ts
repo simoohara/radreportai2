@@ -231,8 +231,9 @@ app.get('/google/callback', async (c) => {
  * Magic Link: Request a login link via email.
  */
 app.post('/magiclink', authLimiter, async (c) => {
-  const body = await c.req.json<{ email: string }>();
+  const body = await c.req.json<{ email: string, ref?: string }>();
   const email = body.email?.toLowerCase()?.trim();
+  const referralCode = body.ref?.trim().slice(0, 255);
 
   if (!email || !email.includes('@')) {
     return c.json({ error: 'Adresse email invalide.' }, 400);
@@ -251,13 +252,23 @@ app.post('/magiclink', authLimiter, async (c) => {
 
     if (!user) {
       // Create new user with magic link
+      let referrerId: number | null = null;
+      if (referralCode) {
+        const referrer = await c.env.DB.prepare('SELECT id FROM users WHERE referral_code = ?')
+          .bind(referralCode)
+          .first<{ id: number }>();
+        if (referrer) {
+          referrerId = referrer.id;
+        }
+      }
+
       const newReferralCode = crypto.randomUUID().replace(/-/g, '').substring(0, 12);
 
       await c.env.DB.prepare(
-        `INSERT INTO users (email, display_name, generations_remaining, referral_code)
-         VALUES (?, ?, 20, ?)`
+        `INSERT INTO users (email, display_name, generations_remaining, referrer_id, referral_code)
+         VALUES (?, ?, 20, ?, ?)`
       )
-        .bind(email, email.split('@')[0], newReferralCode)
+        .bind(email, email.split('@')[0], referrerId, newReferralCode)
         .run();
 
       user = await c.env.DB.prepare('SELECT * FROM users WHERE email = ?')

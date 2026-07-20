@@ -94,10 +94,11 @@ export function LandingPage() {
     if (!email) return;
     setEmailLoading(true);
     try {
+      const referralCode = new URLSearchParams(window.location.search).get('ref');
       const res = await fetch('/auth/magiclink', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, ref: referralCode }),
       });
       if (res.ok) {
         setEmailSent(true);

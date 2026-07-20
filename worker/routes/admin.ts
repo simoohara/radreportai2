@@ -108,21 +108,27 @@ app.get('/admin/users', isAuthenticated, isAdmin, async (c) => {
  */
 app.put('/admin/users/:id/subscription', isAuthenticated, isAdmin, async (c) => {
   const userId = c.req.param('id');
-  const body = await c.req.json<{ subscription_plan: string | null; subscription_expires_at: string | null }>();
+  const body = await c.req.json<{ subscription_plan?: string; subscription_expires_at?: string; role?: 'user' | 'admin' }>();
 
   const validPlans = [null, 'Standard', 'Pro', 'Elite'];
   if (body.subscription_plan !== null && body.subscription_plan !== undefined && !validPlans.includes(body.subscription_plan)) {
     return c.json({ error: 'Forfait invalide.' }, 400);
   }
 
-  const existing = await c.env.DB.prepare('SELECT id FROM users WHERE id = ?').first<{ id: number }>();
+  const existing = await c.env.DB.prepare('SELECT id FROM users WHERE id = ?').bind(userId).first<{ id: number }>();
   if (!existing) {
     return c.json({ error: 'Utilisateur non trouvé.' }, 404);
   }
 
-  await c.env.DB.prepare(
-    'UPDATE users SET subscription_plan = ?, subscription_expires_at = ? WHERE id = ?'
-  ).bind(body.subscription_plan ?? null, body.subscription_expires_at ?? null, userId).run();
+  if (body.role && ['admin', 'user'].includes(body.role)) {
+    await c.env.DB.prepare(
+      'UPDATE users SET subscription_plan = ?, subscription_expires_at = ?, role = ? WHERE id = ?'
+    ).bind(body.subscription_plan ?? null, body.subscription_expires_at ?? null, body.role, userId).run();
+  } else {
+    await c.env.DB.prepare(
+      'UPDATE users SET subscription_plan = ?, subscription_expires_at = ? WHERE id = ?'
+    ).bind(body.subscription_plan ?? null, body.subscription_expires_at ?? null, userId).run();
+  }
 
   return c.json({ message: 'Abonnement mis à jour.' });
 });

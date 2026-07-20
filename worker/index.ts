@@ -10,6 +10,7 @@ import feedbackRoutes from './routes/feedback';
 import billingRoutes from './routes/billing';
 import adminRoutes from './routes/admin';
 import webhookRoutes from './routes/webhooks';
+import { processAutomatedEmails } from './services/marketing';
 
 const app = new Hono<HonoEnv>();
 
@@ -67,4 +68,11 @@ app.onError((err, c) => {
   return c.json({ error: 'Internal server error' }, 500);
 });
 
-export default app;
+export const honoApp = app;
+
+export default {
+  fetch: app.fetch,
+  scheduled: async (_event: any, env: HonoEnv['Bindings'], ctx: any) => {
+    ctx.waitUntil(processAutomatedEmails(env));
+  }
+};

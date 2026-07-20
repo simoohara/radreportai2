@@ -18,5 +18,8 @@
   ],
   "vars": {
     "APP_URL": "https://app.radreportai.com"
+  },
+  "triggers": {
+    "crons": ["0 9 * * *"]
   }
 }

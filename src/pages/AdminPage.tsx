@@ -25,12 +25,15 @@ export function AdminPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [includeArchived, setIncludeArchived] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('new');
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [userSearch, setUserSearch] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState<'all' | 'admin' | 'user'>('all');
+  const [userPlanFilter, setUserPlanFilter] = useState<'all' | 'free' | 'Standard' | 'Pro' | 'Elite'>('all');
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [editPlan, setEditPlan] = useState<string>('');
   const [editExpiry, setEditExpiry] = useState('');
+  const [editRole, setEditRole] = useState<'user' | 'admin'>('user');
 
   if (user?.role !== 'admin') {
     return (
@@ -105,6 +108,7 @@ export function AdminPage() {
     setEditingUser(u);
     setEditPlan(u.subscription_plan ?? '');
     setEditExpiry(u.subscription_expires_at ? u.subscription_expires_at.substring(0, 10) : '');
+    setEditRole(u.role || 'user');
   };
 
   const saveUserSubscription = async () => {
@@ -113,11 +117,12 @@ export function AdminPage() {
       await api.updateUserSubscription(editingUser.id, {
         subscription_plan: editPlan || null,
         subscription_expires_at: editExpiry || null,
+        role: editRole,
       });
       setUsers((prev) =>
         prev.map((u) =>
           u.id === editingUser.id
-            ? { ...u, subscription_plan: editPlan || null, subscription_expires_at: editExpiry || null }
+            ? { ...u, subscription_plan: editPlan || null, subscription_expires_at: editExpiry || null, role: editRole }
             : u
         )
       );
@@ -128,11 +133,21 @@ export function AdminPage() {
     }
   };
 
-  const filteredUsers = users.filter(
-    (u) =>
-      u.email.toLowerCase().includes(userSearch.toLowerCase()) ||
-      (u.display_name && u.display_name.toLowerCase().includes(userSearch.toLowerCase()))
-  );
+  const filteredUsers = users.filter((u) => {
+    const matchesSearch = u.email.toLowerCase().includes(userSearch.toLowerCase()) || 
+                          (u.display_name && u.display_name.toLowerCase().includes(userSearch.toLowerCase()));
+    
+    const matchesRole = userRoleFilter === 'all' || (u.role || 'user') === userRoleFilter;
+    
+    let matchesPlan = true;
+    if (userPlanFilter === 'free') {
+      matchesPlan = !u.subscription_plan;
+    } else if (userPlanFilter !== 'all') {
+      matchesPlan = u.subscription_plan === userPlanFilter;
+    }
+
+    return matchesSearch && matchesRole && matchesPlan;
+  });
 
   const filtered = feedbacks.filter(
     (fb) => statusFilter === 'all' || fb.status === statusFilter
@@ -163,13 +178,37 @@ export function AdminPage() {
       <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: 20 }}>
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <h3 style={{ margin: 0, fontSize: 16 }}>Utilisateurs</h3>
-          <input
-            className="input"
-            style={{ width: 220, padding: '6px 12px', fontSize: 13 }}
-            placeholder="Rechercher par email..."
-            value={userSearch}
-            onChange={(e) => setUserSearch(e.target.value)}
-          />
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <select
+              className="input"
+              style={{ width: 'auto', padding: '6px 32px 6px 10px', fontSize: 13 }}
+              value={userRoleFilter}
+              onChange={(e) => setUserRoleFilter(e.target.value as any)}
+            >
+              <option value="all">Tous les rôles</option>
+              <option value="admin">Administrateurs</option>
+              <option value="user">Utilisateurs standards</option>
+            </select>
+            <select
+              className="input"
+              style={{ width: 'auto', padding: '6px 32px 6px 10px', fontSize: 13 }}
+              value={userPlanFilter}
+              onChange={(e) => setUserPlanFilter(e.target.value as any)}
+            >
+              <option value="all">Tous les forfaits</option>
+              <option value="free">Gratuit</option>
+              <option value="Standard">Standard</option>
+              <option value="Pro">Pro</option>
+              <option value="Elite">Elite</option>
+            </select>
+            <input
+              className="input"
+              style={{ width: 220, padding: '6px 12px', fontSize: 13 }}
+              placeholder="Rechercher par email..."
+              value={userSearch}
+              onChange={(e) => setUserSearch(e.target.value)}
+            />
+          </div>
         </div>
 
         {loading ? (
@@ -365,6 +404,17 @@ export function AdminPage() {
                   <option value="Standard">Standard (29€/mo)</option>
                   <option value="Pro">Pro (49€/mo)</option>
                   <option value="Elite">Elite (99€/mo)</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Rôle (Admin)</label>
+                <select
+                  className="input"
+                  value={editRole}
+                  onChange={(e) => setEditRole(e.target.value as 'user' | 'admin')}
+                >
+                  <option value="user">Utilisateur (Standard)</option>
+                  <option value="admin">Administrateur</option>
                 </select>
               </div>
               <div>
