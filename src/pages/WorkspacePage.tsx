@@ -182,6 +182,41 @@ export function WorkspacePage() {
 
   const dictationMode = (localStorage.getItem('dictationMode') as 'push' | 'toggle') || 'push';
 
+  useEffect(() => {
+    if (dictationMode !== 'push') return;
+
+    let isSpaceDown = false;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && !e.repeat) {
+        const activeElement = document.activeElement;
+        const isInput = activeElement?.tagName === 'INPUT' || activeElement?.tagName === 'TEXTAREA' || (activeElement as HTMLElement)?.isContentEditable;
+        
+        if (!isInput) {
+          e.preventDefault();
+          isSpaceDown = true;
+          startRecording();
+        }
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && isSpaceDown) {
+        isSpaceDown = false;
+        stopRecording();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dictationMode]);
+
   const handleMicMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
     if (dictationMode === 'push') {
       e.preventDefault(); // Prevent text selection on mobile
@@ -442,7 +477,7 @@ export function WorkspacePage() {
               ? `🔴 Enregistrement • ${formatRecordingTime(recordingSeconds)}`
               : isTranscribing
               ? '⏳ Transcription...'
-              : `🎙️ Prêt • ${user?.generations_remaining ?? 0} générations restantes`}
+              : `🎙️ Prêt ${dictationMode === 'push' ? '(Maintenez Espace pour dicter)' : ''} • ${user?.generations_remaining ?? 0} générations restantes`}
           </div>
         </div>
 
