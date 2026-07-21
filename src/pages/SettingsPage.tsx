@@ -19,7 +19,7 @@ export function SettingsPage() {
   const [keywordsDirty, setKeywordsDirty] = useState(false);
 
   const [dictationMode, setDictationMode] = useState<'push' | 'toggle'>(() => {
-    return (localStorage.getItem('dictationMode') as 'push' | 'toggle') || 'push';
+    return (localStorage.getItem('dictationMode') as 'push' | 'toggle') || 'toggle';
   });
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [autoSave, setAutoSave] = useState(() => {

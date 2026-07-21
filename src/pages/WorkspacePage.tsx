@@ -180,7 +180,7 @@ export function WorkspacePage() {
     }
   };
 
-  const dictationMode = (localStorage.getItem('dictationMode') as 'push' | 'toggle') || 'push';
+  const dictationMode = (localStorage.getItem('dictationMode') as 'push' | 'toggle') || 'toggle';
 
   useEffect(() => {
     if (dictationMode !== 'push') return;
