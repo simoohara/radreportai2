@@ -312,13 +312,31 @@ export function SettingsPage() {
                         {user?.generations_remaining ?? 0} / {user?.subscription_plan === 'Pro' ? 2000 : user?.subscription_plan === 'Standard' ? 1000 : 20}
                       </span>
                     </div>
-                    <div style={{ height: 6, borderRadius: 3, background: 'var(--color-surface)', overflow: 'hidden', marginBottom: 8 }}>
+                    <div style={{ height: 6, borderRadius: 3, background: 'var(--color-surface)', overflow: 'hidden', marginBottom: 16 }}>
                       <div style={{
                         height: '100%', 
                         width: `${(((user?.subscription_plan === 'Pro' ? 2000 : user?.subscription_plan === 'Standard' ? 1000 : 20) - (user?.generations_remaining ?? 0)) / (user?.subscription_plan === 'Pro' ? 2000 : user?.subscription_plan === 'Standard' ? 1000 : 20)) * 100}%`,
                         background: 'var(--color-accent)', borderRadius: 3, transition: 'width 0.3s'
                       }} />
                     </div>
+                    
+                    {user?.transcriptions_remaining !== null && user?.transcriptions_remaining !== undefined && (
+                      <>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                          <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>Dictées restantes</span>
+                          <span style={{ fontSize: 13, fontWeight: 600 }}>
+                            {user.transcriptions_remaining} / 50
+                          </span>
+                        </div>
+                        <div style={{ height: 6, borderRadius: 3, background: 'var(--color-surface)', overflow: 'hidden', marginBottom: 8 }}>
+                          <div style={{
+                            height: '100%', 
+                            width: `${((50 - user.transcriptions_remaining) / 50) * 100}%`,
+                            background: 'var(--color-accent)', borderRadius: 3, transition: 'width 0.3s'
+                          }} />
+                        </div>
+                      </>
+                    )}
                     {user?.subscription_expires_at && (
                       <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0 }}>
                         Renouvellement le {new Date(user.subscription_expires_at).toLocaleDateString('fr-FR')}

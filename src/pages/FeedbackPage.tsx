@@ -23,6 +23,7 @@ export function FeedbackPage() {
     setLoading(false);
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadFeedback(); }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {

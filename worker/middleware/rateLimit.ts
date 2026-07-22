@@ -61,3 +61,17 @@ export const billingLimiter = createRateLimiter(
     return user ? String(user.id) : 'anonymous';
   }
 );
+
+/**
+ * Transcription Rate Limiter: Max 60 dictations per hour per user.
+ * This is a fair-use limit to prevent API abuse, while being effectively unlimited for normal users.
+ */
+export const transcriptionLimiter = createRateLimiter(
+  'transcription:user',
+  60,
+  60 * 60, // 1 hour window
+  (c) => {
+    const user = c.get('user');
+    return user ? String(user.id) : 'anonymous';
+  }
+);

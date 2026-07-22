@@ -126,6 +126,12 @@ export const api = {
       body: JSON.stringify({ audioData, mimeType, keywords }),
     }),
 
+  formatTemplate: (content: string) =>
+    fetchWithAuth<{ content: string }>('/api/format-template', {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+    }),
+
   generateNormalTemplate: (data: {
     modality: string;
     region: string;

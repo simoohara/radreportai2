@@ -41,8 +41,10 @@ export function WorkspacePage() {
   const [keywords, setKeywords] = useState<string | null>(null);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [templateToDelete, setTemplateToDelete] = useState<Template | null>(null);
+  const [templateToEdit, setTemplateToEdit] = useState<Template | null>(null);
   const [showGuide, setShowGuide] = useState(false);
   const [guideStep, setGuideStep] = useState(0);
+  const [generationError, setGenerationError] = useState<string | null>(null);
 
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -271,6 +273,7 @@ export function WorkspacePage() {
     }
 
     setIsGenerating(true);
+    setGenerationError(null);
     try {
       const { text } = await api.generate({
         template: editorHtml,
@@ -289,8 +292,10 @@ export function WorkspacePage() {
     } catch (err: any) {
       if (err.message?.includes('402') || err.message?.includes('Payment')) {
         toast.warning('Vous avez épuisé vos générations gratuites.');
+        setGenerationError('Vous avez épuisé vos générations gratuites.');
       } else {
         toast.error('Erreur : ' + err.message);
+        setGenerationError(err.message || "La connexion a échoué. Veuillez vérifier votre réseau.");
       }
     }
     setIsGenerating(false);
@@ -411,7 +416,10 @@ export function WorkspacePage() {
               className="notes-textarea"
               placeholder="Écrivez ou dictez vos observations ici..."
               value={notes}
-              onChange={(e) => setNotes(e.target.value)}
+              onChange={(e) => {
+                setNotes(e.target.value);
+                if (generationError) setGenerationError(null);
+              }}
             />
             {isTranscribing && (
               <div className="panel-overlay">
@@ -458,15 +466,17 @@ export function WorkspacePage() {
 
             {/* Generate button */}
             <button
-              className="btn btn-primary generate-btn"
+              className={`btn ${generationError ? 'btn-secondary' : 'btn-primary'} generate-btn`}
               onClick={handleGenerate}
-              disabled={!canGenerate}
+              disabled={!canGenerate && !generationError}
             >
               {isGenerating ? (
                 <>
                   <div className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />
                   Génération...
                 </>
+              ) : generationError ? (
+                <>🔄 Réessayer</>
               ) : (
                 <>✨ Générer</>
               )}
@@ -483,6 +493,24 @@ export function WorkspacePage() {
 
         {/* Right: Report */}
         <div className="panel report-panel">
+          {generationError && (
+            <div style={{
+              background: 'var(--color-danger-transparent)',
+              color: 'var(--color-danger)',
+              padding: '12px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              borderBottom: '1px solid var(--color-danger-transparent)'
+            }}>
+              <span>⚠️ La génération a échoué: {generationError}</span>
+              <button 
+                className="btn btn-ghost btn-sm" 
+                onClick={() => setGenerationError(null)}
+                style={{ color: 'var(--color-danger)' }}
+              >✕</button>
+            </div>
+          )}
           <div className="panel-header">
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
               <span className="panel-title">📄 Compte rendu</span>
@@ -571,7 +599,7 @@ export function WorkspacePage() {
                   <>
                     <div className="template-group-label">Vos modèles</div>
                     {userTemplates.map((t) => (
-                      <TemplateItem key={t.id} template={t} onSelect={handleSelectTemplate} isUser onDelete={setTemplateToDelete} />
+                      <TemplateItem key={t.id} template={t} onSelect={handleSelectTemplate} isUser onDelete={setTemplateToDelete} onEdit={setTemplateToEdit} />
                     ))}
                   </>
                 )}
@@ -635,6 +663,15 @@ export function WorkspacePage() {
             setEditorHtml(DOMPurify.sanitize(content));
             setShowGenerateModal(false);
           }}
+        />
+      )}
+
+      {templateToEdit && (
+        <SaveTemplateModal
+          currentHtml={templateToEdit.content}
+          currentTemplate={templateToEdit}
+          selectedModality={templateToEdit.modality}
+          onClose={() => setTemplateToEdit(null)}
         />
       )}
 
@@ -723,6 +760,12 @@ const GUIDE_STEPS = [
     title: '3. Générez, relisez et copiez',
     description: 'L’IA remplit la structure du modèle. Relisez toujours le résultat, ajustez-le si besoin, puis copiez-le dans votre PACS.',
   },
+  {
+    icon: '🎬',
+    title: '4. Voir la démo en action',
+    description: 'Découvrez comment créer un compte rendu de A à Z en moins d\'une minute.',
+    videoId: 'E-_FlswC3NQ',
+  },
 ] as const;
 
 function WorkspaceGuide({
@@ -749,6 +792,19 @@ function WorkspaceGuide({
         <p className="guide-step-count">Étape {step + 1} sur {GUIDE_STEPS.length}</p>
         <h2 id="workspace-guide-title">{currentStep.title}</h2>
         <p className="guide-description">{currentStep.description}</p>
+        {'videoId' in currentStep && currentStep.videoId && (
+          <div className="guide-video" style={{ marginTop: '16px', borderRadius: '8px', overflow: 'hidden' }}>
+            <iframe
+              width="100%"
+              height="240"
+              src={`https://www.youtube.com/embed/${currentStep.videoId}`}
+              title="Démo RadReportAI"
+              frameBorder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            ></iframe>
+          </div>
+        )}
         <p className="guide-disclaimer">⚠️ Vérifiez toujours le contenu généré avant de le signer.</p>
         <div className="modal-actions guide-actions">
           <button className="btn btn-ghost" onClick={onSkip}>Passer le guide</button>
@@ -768,11 +824,13 @@ function TemplateItem({
   onSelect,
   isUser = false,
   onDelete,
+  onEdit,
 }: {
   template: Template;
   onSelect: (t: Template) => void;
   isUser?: boolean;
   onDelete?: (template: Template) => void;
+  onEdit?: (template: Template) => void;
 }) {
   return (
     <div className="template-item-row">
@@ -780,6 +838,11 @@ function TemplateItem({
         <span className="template-item-icon">{isUser ? '👤' : '⭐'}</span>
         <span className="template-item-name">{template.name}</span>
       </button>
+      {isUser && onEdit && (
+        <button className="btn btn-ghost btn-sm template-delete-btn" onClick={() => onEdit(template)} title={`Modifier ${template.name}`}>
+          ✏️
+        </button>
+      )}
       {isUser && onDelete && (
         <button className="btn btn-ghost btn-sm template-delete-btn" onClick={() => onDelete(template)} title={`Supprimer ${template.name}`}>
           🗑️

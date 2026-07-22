@@ -65,8 +65,8 @@ async function grantFreeMonths(db: D1Database, user: User, months: number) {
   const quota = newPlan === 'Elite' ? null : (newPlan === 'Standard' ? 1000 : 2000);
 
   await db
-    .prepare('UPDATE users SET subscription_plan = ?, subscription_expires_at = ?, generations_remaining = ? WHERE id = ?')
-    .bind(newPlan, newExpiryDate.toISOString(), quota, user.id)
+    .prepare('UPDATE users SET subscription_plan = ?, subscription_expires_at = ?, generations_remaining = ?, transcriptions_remaining = ? WHERE id = ?')
+    .bind(newPlan, newExpiryDate.toISOString(), quota, newPlan === 'Elite' || newPlan === 'Standard' || newPlan === 'Pro' ? null : 50, user.id)
     .run();
 
   console.log(
@@ -162,9 +162,9 @@ async function updateUserSubscription(
 
   await db
     .prepare(
-      'UPDATE users SET subscription_plan = ?, subscription_expires_at = ?, lemonsqueezy_subscription_id = ?, generations_remaining = ? WHERE id = ?'
+      'UPDATE users SET subscription_plan = ?, subscription_expires_at = ?, lemonsqueezy_subscription_id = ?, generations_remaining = ?, transcriptions_remaining = ? WHERE id = ?'
     )
-    .bind(planDetails.planName, newExpiryDate.toISOString(), subscriptionId, planDetails.monthlyQuota, userId)
+    .bind(planDetails.planName, newExpiryDate.toISOString(), subscriptionId, planDetails.monthlyQuota, null, userId)
     .run();
 
   console.log(

@@ -8,6 +8,8 @@ export interface User {
   created_at: string;
   generations_used: number;
   generations_remaining: number | null;
+  transcriptions_used: number;
+  transcriptions_remaining: number | null;
   subscription_plan: string | null;
   subscription_expires_at: string | null;
   lemonsqueezy_subscription_id: string | null;
@@ -73,6 +75,8 @@ export interface AdminUser {
   created_at: string;
   generations_used: number;
   generations_remaining: number | null;
+  transcriptions_used: number;
+  transcriptions_remaining: number | null;
   subscription_plan: string | null;
   subscription_expires_at: string | null;
   referral_code: string | null;

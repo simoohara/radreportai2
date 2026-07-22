@@ -9,7 +9,7 @@ The application is deployed at `https://radreportai2.simoohara.workers.dev`.
 - Frontend: React, Vite, TypeScript, Zustand.
 - Backend: Hono on Cloudflare Workers, served with Cloudflare static assets and an `ASSETS` SPA fallback.
 - Database: Cloudflare D1 (`radreportai-db`).
-- AI provider: Gemini 2.5 Flash through direct REST calls.
+- AI provider: Google Gemini (`gemini-3.1-pro-preview` for high-quality reasoning in report generation, and `gemini-2.5-flash` for fast, cost-efficient audio transcription).
 - Authentication: Google OAuth and magic links with JWT-backed sessions.
 
 The production Worker, D1 schema, SPA routing, login, templates, dictation, report generation, report copying, profile, settings, and feedback flows are wired up. The initial D1 migration is recorded as applied; `npx wrangler d1 migrations list radreportai-db --remote` reports no pending migrations.
@@ -43,7 +43,9 @@ The production Worker, D1 schema, SPA routing, login, templates, dictation, repo
   3. **User Custom Keywords:** Users can define their own difficult medical terms ("Mes termes difficiles") in the Settings page. These personal terms are merged with the template's keywords during dictation to further boost accuracy.
 - Browser recording chooses a supported audio MIME type, limits recordings to five minutes / 10 MB, cleans up microphone tracks, and shows a live recording timer.
 - The transcription endpoint validates authentication, audio format, payload size, and base64 input before calling Gemini.
+- **Transcription Quota & Rate Limiting:** Dictations are now metered independently from report generation. Free users get a hard cap of 50 dictations (tracked via `transcriptions_remaining`), while paid users have unlimited dictations. To prevent abuse, a generous rate limit of 60 transcriptions per hour per user is enforced for all via `transcriptionLimiter`.
 - Gemini responses are checked for usable text before use.
+- **Atomic Quota Charging**: Quota usage decrementing (`checkAndDecrementQuota` and `checkAndDecrementTranscriptionQuota`) is performed atomically using SQLite's `RETURNING` clause (e.g., `AND generations_remaining > 0`) to prevent TOCTOU race conditions under concurrent requests.
 - Invalid requests and upstream Gemini failures no longer consume a generation; failed calls refund the previously reserved quota.
 
 ### Workspace and templates
@@ -59,8 +61,15 @@ The production Worker, D1 schema, SPA routing, login, templates, dictation, repo
 - A smart top-level template search searches names, modalities, and template text, ranks matches, and recognises aliases such as `scanner`/`TDM`, `IRM`/`MRI`, `écho`/`échographie`, and `radio`/`radiographie`.
 - Clipboard handling writes styled HTML plus a structured text fallback and includes a legacy rich-copy fallback for browsers that do not support `ClipboardItem`.
 
-### Verification performed
+### Frontend robustness
 
+- Added a global React `ErrorBoundary` component that wraps the entire application routing tree, providing a graceful fallback UI instead of crashing to a white screen.
+- Implemented robust UI retry states in the `WorkspacePage.tsx` editor. Generation and API errors now display a persistent red warning banner above the editor and transform the Generate button into a "Retry" button, rather than just flashing a transient toast.
+- All frontend lint rules and typings are successfully resolving for these additions.
+
+### Verification & Testing performed
+
+- **Automated Testing Suite**: Implemented three layers of tests (Unit/Component with JSDOM, Backend API Integration with Miniflare D1 pool, and E2E with Playwright). Integrated with GitHub Actions CI pipeline on `push` and `pull_request` to `main`.
 - `npm run build` passes.
 - Production dependency audit reports no known vulnerabilities.
 - Public production page was inspected without application console errors.
@@ -168,12 +177,8 @@ https://radreportai2.simoohara.workers.dev/auth/google/callback
 
 ## Remaining work
 
-- **Recommended hardening:** Write automated tests for billing and quota logic.reservations/refunds, template search ranking, auth state validation, and clipboard fallbacks.
-- Add browser end-to-end tests for authenticated template selection, dictation, generation, workspace navigation persistence, and PACS paste compatibility.
-- Decide on rate limits and usage accounting for transcription separately from report generation.
 - Review any regulatory, privacy, and data-processing obligations before using the service with identifiable patient data.
 - Add Content Security Policy headers.
-- Add error boundary component for React.
 
 ## Local development
 

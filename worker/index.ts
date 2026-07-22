@@ -38,6 +38,26 @@ app.get('/api/health', (c) => {
   return c.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+import { bodyLimit } from 'hono/body-limit';
+
+// Standard 1MB limit for most routes to prevent DoS
+const standardLimit = bodyLimit({
+  maxSize: 1 * 1024 * 1024, // 1MB
+  onError: (c) => c.json({ error: 'Payload Too Large' }, 413),
+});
+
+// Apply 1MB limit to standard routes
+app.use('/auth/*', standardLimit);
+// We can't apply it to /api/* directly because /api/transcribe needs 10MB.
+// Apply to specific prefixes or apply 1MB inside individual routers.
+// Actually, it's safer to just apply standardLimit to specific API sub-routes here.
+app.use('/api/templates/*', standardLimit);
+app.use('/api/feedback/*', standardLimit);
+app.use('/api/billing/*', standardLimit);
+app.use('/api/admin/*', standardLimit);
+app.use('/api/webhooks/*', standardLimit);
+app.use('/api/config/*', standardLimit);
+
 // Mount routes
 app.route('/auth', authRoutes);
 app.route('/api', userRoutes);

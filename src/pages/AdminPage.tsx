@@ -35,17 +35,6 @@ export function AdminPage() {
   const [editExpiry, setEditExpiry] = useState('');
   const [editRole, setEditRole] = useState<'user' | 'admin'>('user');
 
-  if (user?.role !== 'admin') {
-    return (
-      <div style={{ textAlign: 'center', padding: 60 }}>
-        <h2>Accès interdit</h2>
-        <p style={{ color: 'var(--color-text-secondary)', marginTop: 8 }}>
-          Cette page est réservée aux administrateurs.
-        </p>
-      </div>
-    );
-  }
-
   const loadData = async () => {
     try {
       const [s, fb, u] = await Promise.all([
@@ -62,6 +51,7 @@ export function AdminPage() {
     setLoading(false);
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadData(); }, [includeArchived]);
 
   const handleStatusChange = async (id: number, status: string) => {
@@ -119,10 +109,16 @@ export function AdminPage() {
         subscription_expires_at: editExpiry || null,
         role: editRole,
       });
+
+      let newQuota: number | null = 20;
+      if (editPlan === 'Standard') newQuota = 1000;
+      if (editPlan === 'Pro') newQuota = 2000;
+      if (editPlan === 'Elite') newQuota = null;
+
       setUsers((prev) =>
         prev.map((u) =>
           u.id === editingUser.id
-            ? { ...u, subscription_plan: editPlan || null, subscription_expires_at: editExpiry || null, role: editRole }
+            ? { ...u, subscription_plan: editPlan || null, subscription_expires_at: editExpiry || null, role: editRole, generations_remaining: newQuota }
             : u
         )
       );
@@ -152,6 +148,17 @@ export function AdminPage() {
   const filtered = feedbacks.filter(
     (fb) => statusFilter === 'all' || fb.status === statusFilter
   );
+
+  if (user?.role !== 'admin') {
+    return (
+      <div style={{ textAlign: 'center', padding: 60 }}>
+        <h2>Accès interdit</h2>
+        <p style={{ color: 'var(--color-text-secondary)', marginTop: 8 }}>
+          Cette page est réservée aux administrateurs.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div style={{ maxWidth: 1000, margin: '0 auto', paddingBottom: 40 }}>
@@ -244,11 +251,21 @@ export function AdminPage() {
                         <span style={{ fontSize: 10, fontWeight: 700, background: 'var(--color-delete)', color: '#fff', padding: '1px 6px', borderRadius: 100 }}>SUPPRIMÉ</span>
                       )}
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                      <span>Inscrit le {new Date(u.created_at).toLocaleDateString('fr-FR')}</span>
-                      <span>Générations: {u.generations_used} / {u.generations_remaining !== null ? 20 - u.generations_remaining : '∞'}</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13, color: 'var(--color-text-secondary)' }}>
                       {u.subscription_plan && <span style={{ color: 'var(--color-accent)', fontWeight: 500 }}>Forfait {u.subscription_plan}</span>}
                       {!u.subscription_plan && <span>Gratuit</span>}
+                      <span>
+                        Générations: {u.generations_used} / {
+                          u.subscription_plan === 'Elite' || u.generations_remaining === null 
+                            ? '∞' 
+                            : u.subscription_plan === 'Pro' 
+                              ? 2000 
+                              : u.subscription_plan === 'Standard' 
+                                ? 1000 
+                                : 20
+                        }
+                        {u.generations_remaining !== null && ` (${u.generations_remaining} restantes)`}
+                      </span>
                       {u.subscription_expires_at && <span>Expire le {new Date(u.subscription_expires_at).toLocaleDateString('fr-FR')}</span>}
                     </div>
                   </div>

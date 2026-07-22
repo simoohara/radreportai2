@@ -3,6 +3,7 @@ import * as mammoth from 'mammoth';
 import DOMPurify from 'dompurify';
 import { useTemplateStore } from '../stores/templateStore';
 import { MODALITIES } from '../types';
+import { api } from '../services/api';
 
 interface ImportTemplateModalProps {
   onClose: () => void;
@@ -46,10 +47,15 @@ export function ImportTemplateModal({ onClose, onImportSuccess }: ImportTemplate
         }
 
         const name = file.name.replace(/\.[^/.]+$/, "");
+        
+        setStatus(`Formatage de ${file.name} par l'IA...`);
+        const formattedResponse = await api.formatTemplate(content);
+        const formattedContent = formattedResponse.content || content; // Fallback to raw content if error
+
         await addTemplate({
           modality,
           name,
-          content: DOMPurify.sanitize(content)
+          content: DOMPurify.sanitize(formattedContent)
         });
         importedCount++;
       } catch (err: any) {

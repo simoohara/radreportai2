@@ -4,7 +4,7 @@
  * so we use the REST API directly.
  */
 
-const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
+const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1alpha/models';
 
 interface GeminiPart {
   text?: string;
@@ -28,13 +28,16 @@ interface GeminiRequest {
 interface GeminiResponse {
   candidates?: Array<{
     content: {
-      parts?: Array<{ text?: string }>;
+      parts?: Array<{ text?: string; thought?: boolean }>;
     };
   }>;
 }
 
 function getResponseText(data: GeminiResponse): string {
+  // Gemini 2.5 Pro is a thinking model — filter out "thought" parts
+  // and only keep the final output text.
   const text = data.candidates?.[0]?.content?.parts
+    ?.filter((part) => !part.thought)
     ?.map((part) => part.text || '')
     .join('')
     .trim();
@@ -53,7 +56,7 @@ export async function generateContent(
   apiKey: string,
   prompt: string,
   systemInstruction?: string,
-  model: string = 'gemini-2.5-pro'
+  model: string = 'gemini-3.1-pro-preview'
 ): Promise<string> {
   const url = `${GEMINI_API_BASE}/${model}:generateContent?key=${apiKey}`;
 
@@ -87,7 +90,7 @@ export async function generateContent(
 export async function generateContentWithSearch(
   apiKey: string,
   prompt: string,
-  model: string = 'gemini-2.5-pro'
+  model: string = 'gemini-3.1-pro-preview'
 ): Promise<string> {
   const url = `${GEMINI_API_BASE}/${model}:generateContent?key=${apiKey}`;
 

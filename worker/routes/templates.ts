@@ -1,8 +1,19 @@
 import { Hono } from 'hono';
+import { FilterXSS } from 'xss';
 import type { HonoEnv } from '../types';
 import { isAuthenticated } from '../middleware/auth';
 
 const app = new Hono<HonoEnv>();
+
+const xssFilter = new FilterXSS({
+  whiteList: {
+    b: ['class', 'style'], i: ['class', 'style'], strong: ['class', 'style'], em: ['class', 'style'],
+    p: ['class', 'style'], br: ['class', 'style'], h1: ['class', 'style'], h2: ['class', 'style'],
+    h3: ['class', 'style'], h4: ['class', 'style'], h5: ['class', 'style'], h6: ['class', 'style'],
+    ul: ['class', 'style'], ol: ['class', 'style'], li: ['class', 'style'], div: ['class', 'style'],
+    span: ['class', 'style'], u: ['class', 'style'], s: ['class', 'style'], strike: ['class', 'style']
+  }
+});
 
 /**
  * GET /api/templates — List all templates for the current user.
@@ -56,10 +67,12 @@ app.post('/templates', isAuthenticated, async (c) => {
   }
 
   try {
+    const safeContent = xssFilter.process(body.content);
+
     const result = await c.env.DB.prepare(
       'INSERT INTO templates (user_id, modality, name, content) VALUES (?, ?, ?, ?)'
     )
-      .bind(user.id, body.modality, body.name.trim(), body.content)
+      .bind(user.id, body.modality, body.name.trim(), safeContent)
       .run();
 
     // Fetch the created template
@@ -106,7 +119,7 @@ app.put('/templates/:id', isAuthenticated, async (c) => {
   }
   if (body.content) {
     updates.push('content = ?');
-    params.push(body.content);
+    params.push(xssFilter.process(body.content));
   }
   if (body.modality) {
     updates.push('modality = ?');

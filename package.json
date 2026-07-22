@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run"
   },
   "dependencies": {
     "dompurify": "^3.4.12",
@@ -17,24 +18,36 @@
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-router-dom": "^7.18.1",
+    "xss": "^1.0.15",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.44.0",
+    "@cloudflare/vitest-pool-workers": "^0.5.41",
     "@cloudflare/workers-types": "^5.20260711.1",
+    "@playwright/test": "^1.61.1",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
     "@types/dompurify": "^3.0.5",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
+    "jsdom": "^29.1.1",
     "oxlint": "^1.71.0",
     "typescript": "~6.0.2",
     "vite": "^8.1.1",
+    "vitest": "^2.1.9",
     "wrangler": "^4.110.0"
   },
   "allowScripts": {
     "esbuild@0.28.1": true,
     "workerd@1.20260708.1": true,
+    "workerd@1.20260721.1": true,
+    "workerd@1.20241230.0": true,
+    "esbuild@0.21.5": true,
+    "esbuild@0.17.19": true,
     "sharp@0.34.5": true,
     "fsevents@2.3.3": true
   }

@@ -25,19 +25,20 @@ export async function checkAndDecrementQuota(
     return { canProceed: true };
   }
 
-  const remaining = user.generations_remaining || 0;
-  if (remaining <= 0) {
+  // Atomic decrement: Only updates if generations_remaining > 0
+  const result = await db
+    .prepare(
+      'UPDATE users SET generations_remaining = generations_remaining - 1, generations_used = generations_used + 1 WHERE id = ? AND generations_remaining > 0 RETURNING generations_remaining'
+    )
+    .bind(user.id)
+    .all<{ generations_remaining: number }>();
+
+  if (!result.success || result.results.length === 0) {
     return { canProceed: false, error: 'Payment required' };
   }
 
-  const isLastGeneration = remaining === 1;
-
-  await db
-    .prepare(
-      'UPDATE users SET generations_remaining = generations_remaining - 1, generations_used = generations_used + 1 WHERE id = ?'
-    )
-    .bind(user.id)
-    .run();
+  const newRemaining = result.results[0].generations_remaining;
+  const isLastGeneration = newRemaining === 0;
 
   if (isLastGeneration) {
     console.log(
@@ -64,6 +65,60 @@ export async function refundQuota(db: D1Database, user: User): Promise<void> {
   await db
     .prepare(
       'UPDATE users SET generations_remaining = generations_remaining + 1, generations_used = MAX(generations_used - 1, 0) WHERE id = ?'
+    )
+    .bind(user.id)
+    .run();
+}
+
+/**
+ * Check if a user can transcribe and decrement their quota.
+ * - Active subscribers: unlimited, just increment transcriptions_used
+ * - Free users: decrement transcriptions_remaining
+ */
+export async function checkAndDecrementTranscriptionQuota(
+  db: D1Database,
+  user: User
+): Promise<QuotaResult> {
+  const isUnlimited = user.transcriptions_remaining === null;
+
+  if (isUnlimited) {
+    await db
+      .prepare('UPDATE users SET transcriptions_used = transcriptions_used + 1 WHERE id = ?')
+      .bind(user.id)
+      .run();
+    return { canProceed: true };
+  }
+
+  // Atomic decrement: Only updates if transcriptions_remaining > 0
+  const result = await db
+    .prepare(
+      'UPDATE users SET transcriptions_remaining = transcriptions_remaining - 1, transcriptions_used = transcriptions_used + 1 WHERE id = ? AND transcriptions_remaining > 0 RETURNING transcriptions_remaining'
+    )
+    .bind(user.id)
+    .all<{ transcriptions_remaining: number }>();
+
+  if (!result.success || result.results.length === 0) {
+    return { canProceed: false, error: 'Vous avez utilisé toutes vos dictées gratuites. Veuillez passer à un forfait payant pour continuer.' };
+  }
+
+  return { canProceed: true };
+}
+
+/** Undo a transcription quota charge when the upstream AI provider fails. */
+export async function refundTranscriptionQuota(db: D1Database, user: User): Promise<void> {
+  const isUnlimited = user.transcriptions_remaining === null;
+
+  if (isUnlimited) {
+    await db
+      .prepare('UPDATE users SET transcriptions_used = MAX(transcriptions_used - 1, 0) WHERE id = ?')
+      .bind(user.id)
+      .run();
+    return;
+  }
+
+  await db
+    .prepare(
+      'UPDATE users SET transcriptions_remaining = transcriptions_remaining + 1, transcriptions_used = MAX(transcriptions_used - 1, 0) WHERE id = ?'
     )
     .bind(user.id)
     .run();

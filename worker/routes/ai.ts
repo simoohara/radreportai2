@@ -1,11 +1,24 @@
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import type { HonoEnv } from '../types';
 import { isAuthenticated } from '../middleware/auth';
 import { generateContent, generateContentWithSearch, transcribeAudio } from '../services/gemini';
-import { checkAndDecrementQuota, refundQuota } from '../services/quota';
+import { checkAndDecrementQuota, refundQuota, checkAndDecrementTranscriptionQuota, refundTranscriptionQuota } from '../services/quota';
+import { transcriptionLimiter } from '../middleware/rateLimit';
 import { sendFacebookEvent, sendGAEvent } from '../services/analytics';
 
 const app = new Hono<HonoEnv>();
+
+// 1MB limit for most AI routes
+const standardLimit = bodyLimit({ maxSize: 1 * 1024 * 1024, onError: (c) => c.json({ error: 'Payload Too Large' }, 413) });
+// 10MB limit for transcription
+const largeLimit = bodyLimit({ maxSize: 10 * 1024 * 1024, onError: (c) => c.json({ error: 'Payload Too Large' }, 413) });
+
+app.use('/generate', standardLimit);
+app.use('/summarize-report', standardLimit);
+app.use('/generate-normal-template', standardLimit);
+app.use('/format-template', standardLimit);
+app.use('/transcribe', largeLimit, transcriptionLimiter);
 
 // ─── System instructions & prompts (ported from old app) ────────────────────
 
@@ -281,12 +294,56 @@ app.post('/transcribe', isAuthenticated, async (c) => {
     return c.json({ error: 'Invalid audio data' }, 400);
   }
 
+  const user = c.get('user');
+  const quotaCheck = await checkAndDecrementTranscriptionQuota(c.env.DB, user);
+  if (!quotaCheck.canProceed) {
+    return c.json({ error: quotaCheck.error }, 402);
+  }
+
   try {
     const transcription = await transcribeAudio(c.env.API_KEY, body.audioData, mimeType, body.keywords);
     return c.json({ transcription });
   } catch (error) {
     console.error('Error with transcription API:', error);
+    await refundTranscriptionQuota(c.env.DB, user);
     return c.json({ error: 'Failed to transcribe audio' }, 500);
+  }
+});
+
+/**
+ * POST /api/format-template — Format an imported raw template using Gemini.
+ */
+app.post('/format-template', isAuthenticated, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json<{ content: string }>();
+
+  if (!body.content) {
+    return c.json({ error: 'Content is required' }, 400);
+  }
+
+  const quotaCheck = await checkAndDecrementQuota(c.env.DB, user);
+  if (!quotaCheck.canProceed) {
+    return c.json({ error: quotaCheck.error }, 402);
+  }
+
+  try {
+    const prompt = `Formate ce texte brut en un modèle de compte rendu radiologique HTML propre. 
+Utilise des balises <div>, <h2> pour les titres de section (Indication, Technique, Résultats, Conclusion), <strong> pour mettre en évidence les éléments importants, et <p> pour les paragraphes. 
+Ne modifie pas le contenu médical, structure-le simplement. 
+Renvoie UNIQUEMENT le code HTML propre, sans aucun texte explicatif ni démarqueurs de code (comme \`\`\`html).
+    
+TEXTE BRUT :
+${body.content}`;
+
+    // Pass gemini-3.6-flash explicitly for speed on this formatting task
+    const text = await generateContent(c.env.API_KEY, prompt, undefined, 'gemini-3.6-flash');
+    const cleanedText = text.replace(/```html/g, '').replace(/```/g, '').trim();
+
+    return c.json({ content: cleanedText });
+  } catch (error) {
+    await refundQuota(c.env.DB, user).catch(console.error);
+    console.error('Error formatting template:', error);
+    return c.json({ error: 'Failed to format template' }, 500);
   }
 });
 

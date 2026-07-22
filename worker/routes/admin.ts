@@ -96,7 +96,7 @@ app.put('/admin/feedback/:id/archive', isAuthenticated, isAdmin, async (c) => {
  */
 app.get('/admin/users', isAuthenticated, isAdmin, async (c) => {
   const { results } = await c.env.DB.prepare(
-    `SELECT id, email, display_name, role, created_at, generations_used, generations_remaining,
+    `SELECT id, email, display_name, role, created_at, generations_used, generations_remaining, transcriptions_used, transcriptions_remaining,
             subscription_plan, subscription_expires_at, referral_code, referral_points, deleted_at
      FROM users ORDER BY created_at DESC`
   ).all();
@@ -120,14 +120,21 @@ app.put('/admin/users/:id/subscription', isAuthenticated, isAdmin, async (c) => 
     return c.json({ error: 'Utilisateur non trouvé.' }, 404);
   }
 
+  let quota: number | null = 20; // Default for null (free)
+  if (body.subscription_plan === 'Standard') quota = 1000;
+  if (body.subscription_plan === 'Pro') quota = 2000;
+  if (body.subscription_plan === 'Elite') quota = null;
+
+  const transcriptionQuota = body.subscription_plan ? null : 50;
+
   if (body.role && ['admin', 'user'].includes(body.role)) {
     await c.env.DB.prepare(
-      'UPDATE users SET subscription_plan = ?, subscription_expires_at = ?, role = ? WHERE id = ?'
-    ).bind(body.subscription_plan ?? null, body.subscription_expires_at ?? null, body.role, userId).run();
+      'UPDATE users SET subscription_plan = ?, subscription_expires_at = ?, role = ?, generations_remaining = ?, transcriptions_remaining = ? WHERE id = ?'
+    ).bind(body.subscription_plan ?? null, body.subscription_expires_at ?? null, body.role, quota, transcriptionQuota, userId).run();
   } else {
     await c.env.DB.prepare(
-      'UPDATE users SET subscription_plan = ?, subscription_expires_at = ? WHERE id = ?'
-    ).bind(body.subscription_plan ?? null, body.subscription_expires_at ?? null, userId).run();
+      'UPDATE users SET subscription_plan = ?, subscription_expires_at = ?, generations_remaining = ?, transcriptions_remaining = ? WHERE id = ?'
+    ).bind(body.subscription_plan ?? null, body.subscription_expires_at ?? null, quota, transcriptionQuota, userId).run();
   }
 
   return c.json({ message: 'Abonnement mis à jour.' });
