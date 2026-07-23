@@ -41,7 +41,7 @@ for (const [modality, templates] of Object.entries(modalities)) {
   for (const [name, content] of Object.entries(templates)) {
     const escapedName = name.replace(/'/g, "''");
     const escapedContent = content.replace(/'/g, "''");
-    sql += `INSERT INTO templates (user_id, modality, name, content) VALUES (NULL, '${modality}', '${escapedName}', '${escapedContent}');\n`;
+    sql += `INSERT INTO templates (user_id, modality, name, content) SELECT NULL, '${modality}', '${escapedName}', '${escapedContent}' WHERE NOT EXISTS (SELECT 1 FROM templates WHERE user_id IS NULL AND modality = '${modality}' AND name = '${escapedName}');\n`;
     count++;
   }
   sql += '\n';
