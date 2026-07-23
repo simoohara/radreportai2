@@ -22,7 +22,7 @@ export function WorkspacePage() {
   } = useTemplateStore();
   const {
     editorContent, originalEditorContent, notes, editLevel, isGenerating,
-    isRecording, isTranscribing,
+    isRecording, isTranscribing, generatedReport,
     setEditorContent, setOriginalEditorContent, setNotes, setEditLevel, setGeneratedReport,
     setIsGenerating, setIsRecording, setIsTranscribing, appendToNotes,
   } = useWorkspaceStore();
@@ -37,6 +37,7 @@ export function WorkspacePage() {
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
+  const [hasCopiedReport, setHasCopiedReport] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [keywords, setKeywords] = useState<string | null>(null);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
@@ -89,14 +90,15 @@ export function WorkspacePage() {
 
   const handleSelectTemplate = useCallback((template: Template) => {
     const isEditorDirty = originalEditorContent !== editorHtml;
-    if (isEditorDirty) {
+    const isUncopiedReport = !!(generatedReport && editorHtml === generatedReport && !hasCopiedReport);
+    if (isEditorDirty || isUncopiedReport) {
       setPendingTemplate(template);
       setShowTemplateModal(false);
       setShowTemplateSearch(false);
     } else {
       executeSelectTemplate(template);
     }
-  }, [editorHtml, originalEditorContent, executeSelectTemplate]);
+  }, [editorHtml, originalEditorContent, generatedReport, hasCopiedReport, executeSelectTemplate]);
 
   // ─── Recording ────────────────────────────────────────
   const startRecording = async () => {
@@ -287,6 +289,7 @@ export function WorkspacePage() {
       setEditorHtml(cleaned);
       setOriginalEditorContent(cleaned);
       setGeneratedReport(cleaned);
+      setHasCopiedReport(false);
       await checkAuth(); // refresh generation count
       toast.success('Rapport généré !');
     } catch (err: any) {
@@ -313,6 +316,7 @@ export function WorkspacePage() {
       setEditorHtml(cleaned);
       setOriginalEditorContent(cleaned);
       setGeneratedReport(cleaned);
+      setHasCopiedReport(false);
       await checkAuth();
       toast.success('Rapport résumé !');
     } catch (err: any) {
@@ -330,6 +334,7 @@ export function WorkspacePage() {
     } else {
       toast.success(result === 'html' ? 'Rapport copié !' : 'Copié (texte brut)');
       setIsCopied(true);
+      setHasCopiedReport(true);
       setTimeout(() => setIsCopied(false), 2000);
     }
   };
@@ -540,7 +545,7 @@ export function WorkspacePage() {
                 className="btn btn-ghost btn-sm"
                 onClick={() => setShowSaveModal(true)}
                 disabled={!editorHtml.trim()}
-                title="Sauvegarder"
+                title="Sauvegarder le modèle"
               >
                 💾
               </button>
@@ -569,7 +574,11 @@ export function WorkspacePage() {
       {pendingTemplate && (
         <ConfirmModal
           title="Changer de modèle ?"
-          message="Vous avez des modifications non sauvegardées dans l'éditeur. Voulez-vous continuer et les perdre ?"
+          message={
+            (generatedReport && editorHtml === generatedReport && !hasCopiedReport)
+              ? "Vous venez de générer un compte rendu mais vous ne l'avez pas encore copié. Êtes-vous sûr de vouloir charger un nouveau modèle et perdre ce compte rendu ?"
+              : "Vous avez des modifications non sauvegardées dans l'éditeur. Voulez-vous continuer et les perdre ?"
+          }
           confirmText="Continuer"
           cancelText="Annuler"
           danger={true}
@@ -649,6 +658,7 @@ export function WorkspacePage() {
           currentHtml={editorHtml}
           currentTemplate={selectedTemplate}
           selectedModality={selectedModality}
+          isGenerated={!!(generatedReport && editorHtml === generatedReport)}
           onClose={() => setShowSaveModal(false)}
         />
       )}
@@ -913,15 +923,17 @@ function SaveTemplateModal({
   currentHtml,
   currentTemplate,
   selectedModality,
+  isGenerated,
   onClose,
 }: {
   currentHtml: string;
   currentTemplate: Template | null;
   selectedModality: string;
+  isGenerated?: boolean;
   onClose: () => void;
 }) {
   const toast = useToast();
-  const { addTemplate, updateTemplate } = useTemplateStore();
+  const { addTemplate, updateTemplate, selectTemplate } = useTemplateStore();
   const [name, setName] = useState(currentTemplate?.name || '');
   const [modality, setModality] = useState(currentTemplate?.modality || selectedModality);
   const [saving, setSaving] = useState(false);
@@ -950,7 +962,8 @@ function SaveTemplateModal({
         await updateTemplate(currentTemplate.id, { name: name.trim(), content, modality });
         toast.success('Modèle mis à jour !');
       } else {
-        await addTemplate({ name: name.trim(), modality, content });
+        const newTemplate = await addTemplate({ name: name.trim(), modality, content });
+        selectTemplate(newTemplate);
         toast.success('Modèle sauvegardé !');
       }
       onClose();
@@ -966,6 +979,11 @@ function SaveTemplateModal({
         <div className="modal-header">
           <h2>{currentTemplate?.user_id != null ? 'Mettre à jour' : 'Sauvegarder'} le modèle</h2>
         </div>
+        {isGenerated && (
+          <div style={{ padding: '12px', background: 'var(--color-danger-transparent)', color: 'var(--color-danger)', borderRadius: '6px', marginBottom: '16px', fontSize: '13px' }}>
+            ⚠️ <strong>Attention :</strong> Ce texte semble être un compte rendu contenant des données patient. Ne le sauvegardez pas comme modèle !
+          </div>
+        )}
         <div style={{ display: 'grid', gap: 16 }}>
           <div>
             <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, display: 'block' }}>Nom</label>
