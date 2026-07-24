@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import DOMPurify from 'dompurify';
 import { useTemplateStore } from '../stores/templateStore';
 import { useWorkspaceStore } from '../stores/workspaceStore';
@@ -35,6 +36,9 @@ export function WorkspacePage() {
   const [templateQuery, setTemplateQuery] = useState('');
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [showSatisfactionBanner, setShowSatisfactionBanner] = useState(false);
+  const navigate = useNavigate();
   const [showImportModal, setShowImportModal] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const [hasCopiedReport, setHasCopiedReport] = useState(false);
@@ -291,6 +295,10 @@ export function WorkspacePage() {
       setGeneratedReport(cleaned);
       setHasCopiedReport(false);
       await checkAuth(); // refresh generation count
+      const updatedUser = useAuthStore.getState().user;
+      if (updatedUser && !updatedUser.subscription_plan && updatedUser.generations_used === 5) {
+        setShowSatisfactionBanner(true);
+      }
       toast.success('Rapport généré !');
     } catch (err: any) {
       if (err.message?.includes('402') || err.message?.includes('Payment')) {
@@ -354,6 +362,15 @@ export function WorkspacePage() {
 
   return (
     <div className="workspace">
+      {/* ─── Satisfaction Banner ─────────────────────────────── */}
+      {showSatisfactionBanner && (
+        <div style={{ background: 'var(--color-primary-transparent)', padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', borderBottom: '1px solid var(--color-border)' }}>
+          <span>RadReportAI vous fait gagner du temps ? Débloquez tout son potentiel avec le forfait Pro.</span>
+          <button className="btn btn-primary btn-sm" onClick={() => navigate('/billing')}>Voir les forfaits</button>
+          <button className="btn btn-ghost btn-sm" onClick={() => setShowSatisfactionBanner(false)}>✕</button>
+        </div>
+      )}
+
       {/* ─── Modality bar ─────────────────────────────── */}
       <div className="modality-bar">
         <div className="modality-group">
@@ -447,9 +464,18 @@ export function WorkspacePage() {
                 <button
                   key={level}
                   className={`edit-level-btn ${editLevel === level ? 'active' : ''}`}
-                  onClick={() => setEditLevel(level)}
+                  onClick={() => {
+                    if (level === 'ameliore' && !user?.subscription_plan) {
+                      setShowUpgradeModal(true);
+                      return;
+                    }
+                    setEditLevel(level);
+                  }}
                 >
                   {EDIT_LEVEL_LABELS[level]}
+                  {level === 'ameliore' && !user?.subscription_plan && (
+                    <span style={{ marginLeft: 6, fontSize: 10, background: 'var(--color-primary-transparent)', color: 'var(--color-primary)', padding: '2px 4px', borderRadius: 4, fontWeight: 'bold' }}>PRO</span>
+                  )}
                 </button>
               ))}
             </div>
@@ -487,12 +513,22 @@ export function WorkspacePage() {
               )}
             </button>
           </div>
-          <div className="footer-status">
-            {isRecording
-              ? `🔴 Enregistrement • ${formatRecordingTime(recordingSeconds)}`
-              : isTranscribing
-              ? '⏳ Transcription...'
-              : `🎙️ Prêt ${dictationMode === 'push' ? '(Maintenez Espace pour dicter)' : ''} • ${user?.generations_remaining ?? 0} générations restantes`}
+          <div className="footer-status" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span>
+              {isRecording
+                ? `🔴 Enregistrement • ${formatRecordingTime(recordingSeconds)}`
+                : isTranscribing
+                ? '⏳ Transcription...'
+                : `🎙️ Prêt ${dictationMode === 'push' ? '(Maintenez Espace pour dicter)' : ''}`}
+            </span>
+            {user && !user.subscription_plan && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', background: 'var(--color-surface)', padding: '4px 8px', borderRadius: '4px' }}>
+                <div style={{ width: 80, height: 6, background: 'var(--color-border)', borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', background: 'var(--color-primary)', width: `${Math.min(100, (user.generations_used / 20) * 100)}%` }} />
+                </div>
+                <span style={{ color: 'var(--color-text-secondary)' }}>{user.generations_used} / 20 {user.generations_used >= 20 ? '(épuisé)' : ''}</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -590,6 +626,8 @@ export function WorkspacePage() {
         />
       )}
 
+      {showUpgradeModal && <UpgradeModal onClose={() => setShowUpgradeModal(false)} />}
+
       {/* ─── Template selector modal ─────────────────── */}
       {showTemplateModal && (
         <div className="modal-overlay" onClick={() => setShowTemplateModal(false)}>
@@ -659,6 +697,9 @@ export function WorkspacePage() {
           currentTemplate={selectedTemplate}
           selectedModality={selectedModality}
           isGenerated={!!(generatedReport && editorHtml === generatedReport)}
+          user={user}
+          userTemplatesCount={userTemplates.length}
+          onShowUpgrade={() => setShowUpgradeModal(true)}
           onClose={() => setShowSaveModal(false)}
         />
       )}
@@ -681,6 +722,9 @@ export function WorkspacePage() {
           currentHtml={templateToEdit.content}
           currentTemplate={templateToEdit}
           selectedModality={templateToEdit.modality}
+          user={user}
+          userTemplatesCount={userTemplates.length}
+          onShowUpgrade={() => setShowUpgradeModal(true)}
           onClose={() => setTemplateToEdit(null)}
         />
       )}
@@ -920,6 +964,9 @@ function TemplateSearchModal({
 }
 
 function SaveTemplateModal({
+  user,
+  userTemplatesCount,
+  onShowUpgrade,
   currentHtml,
   currentTemplate,
   selectedModality,
@@ -930,6 +977,9 @@ function SaveTemplateModal({
   currentTemplate: Template | null;
   selectedModality: string;
   isGenerated?: boolean;
+  user: any;
+  userTemplatesCount: number;
+  onShowUpgrade: () => void;
   onClose: () => void;
 }) {
   const toast = useToast();
@@ -954,6 +1004,13 @@ function SaveTemplateModal({
     if (!name.trim()) {
       toast.warning('Le nom est requis.');
       return;
+    }
+    if (!currentTemplate || currentTemplate.user_id === null) {
+      if (!user?.subscription_plan && userTemplatesCount >= 5) {
+        onClose();
+        onShowUpgrade();
+        return;
+      }
     }
     setSaving(true);
     try {
@@ -1827,3 +1884,50 @@ const workspaceStyles = `
   }
 }
 `;
+
+function UpgradeModal({
+  onClose,
+  title = "Passez à l'illimité pour continuer !",
+  message = "Débloquez tout le potentiel de RadReportAI avec le forfait Pro :",
+}: {
+  onClose: () => void;
+  title?: string;
+  message?: string;
+}) {
+  const navigate = useNavigate();
+  return (
+    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 1000 }}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480, padding: '32px' }}>
+        <button className="btn btn-ghost btn-sm" style={{ position: 'absolute', top: 12, right: 12 }} onClick={onClose}>✕</button>
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>🚀</div>
+          <h2 style={{ fontSize: 24, marginBottom: 8 }}>{title}</h2>
+          <p style={{ color: 'var(--color-text-secondary)' }}>{message}</p>
+        </div>
+        
+        <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 32px 0', display: 'grid', gap: 12 }}>
+          <li style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ color: 'var(--color-primary)' }}>✓</span>
+            <span><strong>Générations illimitées</strong> (sans aucune restriction)</span>
+          </li>
+          <li style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ color: 'var(--color-primary)' }}>✓</span>
+            <span><strong>Modèles sur-mesure</strong> (sauvegardez vos propres trames)</span>
+          </li>
+          <li style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ color: 'var(--color-primary)' }}>✓</span>
+            <span><strong>Transcription plus rapide</strong> (priorité serveur)</span>
+          </li>
+        </ul>
+
+        <button 
+          className="btn btn-primary" 
+          style={{ width: '100%', padding: '14px', fontSize: 16 }}
+          onClick={() => { onClose(); navigate('/billing'); }}
+        >
+          Découvrir RadReportAI Pro
+        </button>
+      </div>
+    </div>
+  );
+}
